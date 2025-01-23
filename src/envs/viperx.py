@@ -34,13 +34,13 @@ class ViperXEnv(MujocoEnv):
         xml_file: str = "trossen_vx300s/scene_box.xml",
         frame_skip: int = 5,  # each 'step' of the environment corresponds to 5 timesteps in the simulation
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
-        gripper_distance_reward_weight: float = 10,
-        box_distance_reward_weight: float = 10,
+        gripper_distance_reward_weight: float = 0.5,
+        box_distance_reward_weight: float = 1,
         grasp_reward_weight: float = 5,
         success_reward: float = 100,
         time_penalty_weight: float = 0.0001,  # penalize long episodes
         collision_penalty_weight: float = 0.2,  # penalize collisions
-        ctrl_cost_weight: float = 0.5,  # penalize large/jerky actions
+        ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
         goal_tolerance: float = 0.015,  # tolerated distance from goal position to be considered as success
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
         # main_body: Union[int, str] = 1,
@@ -237,15 +237,21 @@ class ViperXEnv(MujocoEnv):
         box_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "box")
         box_position = self.data.xpos[box_id]
 
+        # Scheme 1. reward the reduction in distance between the gripper and the box
         # Get current and previous positions of the gripper
-        current_distance = np.linalg.norm(gripper_position - box_position)
-        previous_distance = np.linalg.norm(
-            self.previous_state["box_position"] - box_position
-        )
+        # current_distance = np.linalg.norm(gripper_position - box_position)
+        # previous_distance = np.linalg.norm(
+        #     self.previous_state["box_position"] - box_position
+        # )
 
         # Calculate reward based on reduction in distance
-        distance_reward = self._gripper_distance_reward_weight * (
-            previous_distance - current_distance
+        # distance_reward = self._gripper_distance_reward_weight * (
+        #     previous_distance - current_distance
+        # )
+
+        # Scheme 2. penalize the distance between the gripper and the box
+        distance_reward = -self._gripper_distance_reward_weight * np.linalg.norm(
+            gripper_position - box_position
         )
 
         return distance_reward
@@ -256,15 +262,22 @@ class ViperXEnv(MujocoEnv):
     def box_distance_reward(self):
         box_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "box")
         box_position = self.data.xpos[box_id]
+
+        # Scheme 1. reward the reduction in distance between the box and the goal
         # Get current and previous positions of the box
-        current_distance = np.linalg.norm(box_position - self.goal_position)
-        previous_distance = np.linalg.norm(
-            self.previous_state["box_position"] - self.goal_position
-        )
+        # current_distance = np.linalg.norm(box_position - self.goal_position)
+        # previous_distance = np.linalg.norm(
+        #     self.previous_state["box_position"] - self.goal_position
+        # )
 
         # Calculate reward based on reduction in distance
-        distance_reward = self._box_distance_reward_weight * (
-            previous_distance - current_distance
+        # distance_reward = self._box_distance_reward_weight * (
+        #     previous_distance - current_distance
+        # )
+
+        # Scheme 2. penalize the distance between the box and the goal
+        distance_reward = -self._box_distance_reward_weight * np.linalg.norm(
+            box_position - self.goal_position
         )
 
         return distance_reward
@@ -381,7 +394,9 @@ class ViperXEnv(MujocoEnv):
 
     def _reset_goal(self):
         self.goal_position = self._generate_valid_location()
-        goal_site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, "goal_site")
+        goal_site_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_SITE, "goal_site"
+        )
         self.model.site_pos[goal_site_id] = self.goal_position
 
         mujoco.mj_forward(self.model, self.data)
