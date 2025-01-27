@@ -36,14 +36,13 @@ class ViperXEnv(MujocoEnv):
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
         gripper_distance_reward_weight: float = 0.5,
         box_distance_reward_weight: float = 1,
-        grasp_reward_weight: float = 5,
+        grasp_reward_weight: float = 2,
         success_reward: float = 100,
         time_penalty_weight: float = 0.0001,  # penalize long episodes
-        collision_penalty_weight: float = 0.2,  # penalize collisions
+        collision_penalty_weight: float = 0.0,  # penalize collisions - set to 0 for now
         ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
         goal_tolerance: float = 0.015,  # tolerated distance from goal position to be considered as success
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
-        # main_body: Union[int, str] = 1,
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
         include_cfrc_ext_in_observation: bool = False,
         randomize_box_position: bool = False,
@@ -63,9 +62,6 @@ class ViperXEnv(MujocoEnv):
 
         # clip range for rewards related to contact forces
         self._contact_force_range = contact_force_range
-
-        # id of the main body of the robot(e.g. the 'torso')
-        # self._main_body = main_body
 
         self._include_cfrc_ext_in_observation = include_cfrc_ext_in_observation
         self._randomize_box_position = randomize_box_position
@@ -91,7 +87,7 @@ class ViperXEnv(MujocoEnv):
             "render_fps": int(np.round(1.0 / self.dt)),
         }
 
-        self._reset_goal(np.array([0.0,0.4,0.025]))
+        self._reset_goal(np.array([0.0, 0.4, 0.025]))
 
         # for observations, we collect the model's qpos and qvel, and the goal position
         obs_size = self.data.qpos.size + self.data.qvel.size + 3
@@ -289,16 +285,20 @@ class ViperXEnv(MujocoEnv):
         return distance_reward
 
     # Reward 2: Grasp Reward
-    # This reward is given when the gripper is in contact with the box
+    # This motivates the robot arm to move closer to the box and grasp it
     @property
     def grasp_reward(self):
-        box_geom_ids = self.box_geom_ids
-        gripper_geom_ids = self.gripper_geom_ids
+        box_position = self._get_box_position()
 
-        grasp_cost = self._grasp_reward_weight * self.is_grasping_object(
-            box_geom_ids, gripper_geom_ids
+        gripper_body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, "gripper_link"
         )
-        return grasp_cost
+        gripper_position = self.data.xpos[gripper_body_id]
+
+        grasp_reward = -self._grasp_reward_weight * np.linalg.norm(
+            gripper_position - box_position
+        )
+        return grasp_reward
 
     # Reward 3: Success Reward
     # Note that once the success reward was given, the episode will be terminated
