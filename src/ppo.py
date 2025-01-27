@@ -26,16 +26,16 @@ class ActorNN(nn.Module):
         self.device = device
 
         self.fc = nn.Sequential(
-            layer_init(nn.Linear(in_dim, 512)),
+            layer_init(nn.Linear(in_dim, 1024)),
             nn.Tanh(),
-            layer_init(nn.Linear(512, 256)),
+            layer_init(nn.Linear(1024, 512)),
             nn.Tanh(),
-            layer_init(nn.Linear(256, 256)),
+            layer_init(nn.Linear(512, 512)),
             nn.Tanh(),
         )
 
-        self.mu = layer_init(nn.Linear(256, out_dim), std=0.01)
-        self.sigma = nn.Linear(256, out_dim)
+        self.mu = layer_init(nn.Linear(512, out_dim), std=0.01)
+        self.sigma = nn.Linear(512, out_dim)
 
     def forward(self, obs):
         if not torch.is_tensor(obs):
@@ -56,11 +56,11 @@ class CriticNN(nn.Module):
         self.device = device
 
         self.fc = nn.Sequential(
-            layer_init(nn.Linear(in_dim, 512)),
+            layer_init(nn.Linear(in_dim, 1024)),
             nn.ReLU(),
-            layer_init(nn.Linear(512, 256)),
+            layer_init(nn.Linear(1024, 512)),
             nn.ReLU(),
-            layer_init(nn.Linear(256, out_dim), std=1),
+            layer_init(nn.Linear(512, out_dim), std=1),
         )
 
     def forward(self, obs):
@@ -371,17 +371,24 @@ env = gym.make(
     frame_skip=5,
     max_episode_steps=500,  # physics steps will have been multiplied by 5, due to the frame_skip value
     xml_file=os.path.join(models_path, "trossen_vx300s/scene_box.xml"),
+    collision_penalty_weight = 0.0,
+    gripper_distance_reward_weight = 0.0,
+    ctrl_cost_weight = 0.05,
+    success_reward = 200,
+    box_distance_reward_weight = 4,
+    grasp_reward_weight = 10,
+    time_penalty_weight = 0
 )
 
 model = PPO(
     obs_dim=env.observation_space.shape[0],
     act_dim=env.action_space.shape[0],
-    ent_coef=5e-5,
+    ent_coef=2e-4,
     device=torch.device("cpu"),
-    actor_lr=0.0005,
-    critic_lr=0.0005,
+    actor_lr=0.0001,
+    critic_lr=0.0001,
     timesteps_per_batch=4000,
-    reward_scale=0.1,
+    reward_scale=0.01,
 )
 
 total_t = 0
