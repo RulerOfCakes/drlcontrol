@@ -46,7 +46,7 @@ class ViperXEnv(MujocoEnv):
         # main_body: Union[int, str] = 1,
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
         include_cfrc_ext_in_observation: bool = False,
-        randomize_box_position: bool = True,
+        randomize_box_position: bool = False,
         **kwargs,
     ):
         # initialize the environment variables
@@ -91,7 +91,7 @@ class ViperXEnv(MujocoEnv):
             "render_fps": int(np.round(1.0 / self.dt)),
         }
 
-        self._reset_goal()
+        self._reset_goal(np.array([0.0,0.4,0.025]))
 
         # for observations, we collect the model's qpos and qvel, and the goal position
         obs_size = self.data.qpos.size + self.data.qvel.size + 3
@@ -123,6 +123,10 @@ class ViperXEnv(MujocoEnv):
 
         return np.array([x, y, z])
 
+    def _get_box_position(self):
+        box_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "box")
+        return self.data.xpos[box_id]
+
     def _spawn_box(self, spawn_position: Optional[np.ndarray] = None):
         """
         Spawns the box at the given position or at a random position near the origin.
@@ -137,6 +141,8 @@ class ViperXEnv(MujocoEnv):
 
         else:
             spawn_position = np.array(spawn_position)
+
+        self.spawn_position = spawn_position
 
         # Get the index of the box's free joint in qpos
         box_joint_name = "box_free_joint"
@@ -392,11 +398,15 @@ class ViperXEnv(MujocoEnv):
         else:
             return np.concatenate((position, velocity, self.goal_position))
 
-    def _reset_goal(self):
-        self.goal_position = self._generate_valid_location()
+    def _reset_goal(self, spawn_position: Optional[np.ndarray] = None):
         goal_site_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "goal_site"
         )
+        if spawn_position is not None:
+            self.goal_position = np.array(spawn_position)
+        else:
+            self.goal_position = self._generate_valid_location()
+
         self.model.site_pos[goal_site_id] = self.goal_position
 
         mujoco.mj_forward(self.model, self.data)
@@ -415,8 +425,12 @@ class ViperXEnv(MujocoEnv):
         # TODO: check if this resets data.time
         self.set_state(qpos, qvel)
 
-        self._spawn_box()
-        self._reset_goal()
+        if self._randomize_box_position:
+            self._spawn_box()
+            self._reset_goal()
+        else:
+            self._spawn_box(self._get_box_position())
+            self._reset_goal(self.goal_position)
 
         observation = self._get_obs()
 
