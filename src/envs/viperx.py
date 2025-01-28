@@ -288,17 +288,14 @@ class ViperXEnv(MujocoEnv):
     # This motivates the robot arm to move closer to the box and grasp it
     @property
     def grasp_reward(self):
-        box_position = self._get_box_position()
+        box_geom_ids = self.box_geom_ids
+        gripper_geom_ids = self.gripper_geom_ids
 
-        gripper_body_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_BODY, "gripper_link"
+        grasp_cost = self._grasp_reward_weight * self.is_grasping_object(
+            box_geom_ids, gripper_geom_ids
         )
-        gripper_position = self.data.xpos[gripper_body_id]
+        return grasp_cost
 
-        grasp_reward = -self._grasp_reward_weight * np.linalg.norm(
-            gripper_position - box_position
-        )
-        return grasp_reward
 
     # Reward 3: Success Reward
     # Note that once the success reward was given, the episode will be terminated
