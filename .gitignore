@@ -176,3 +176,7 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python
 
 .vscode/
+
+# PPO model save files
+ppo_critic.pth
+ppo_actor.pth
