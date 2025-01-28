@@ -41,14 +41,16 @@ class ActorNN(nn.Module):
         )
 
         self.mu = layer_init(nn.Linear(64, out_dim), std=0.01)
+        self.sigma = nn.Linear(64, out_dim)
 
     def forward(self, obs):
         if not torch.is_tensor(obs):
             obs = torch.Tensor(obs, dtype=torch.float32)
         x = self.fc(obs)
         mu = self.mu(x)
+        sigma = F.softplus(self.sigma(x))
 
-        return mu
+        return mu, sigma
 
 
 class CriticNN(nn.Module):
@@ -106,10 +108,6 @@ class PPO:
         self.actor_optim = Adam(self.actor.parameters(), lr=self.lr)
         self.critic_optim = Adam(self.critic.parameters(), lr=self.lr)
 
-        # Initialize the covariance matrix used to query the actor for actions
-        self.cov_var = torch.full(size=(self.act_dim,), fill_value=0.5)
-        self.cov_mat = torch.diag(self.cov_var)
-
         # This logger will help us with printing out summaries of each iteration
         self.logger = {
             'delta_t': time.time_ns(),
@@ -136,10 +134,10 @@ class PPO:
         i_so_far = 0 # Iterations ran so far
         while t_so_far < total_timesteps:                                                                       # ALG STEP 2
             # Autobots, roll out (just kidding, we're collecting our batch simulations here)
-            batch_obs, batch_acts, batch_log_probs, batch_rews, batch_lens, batch_vals, batch_dones = self.rollout()                     # ALG STEP 3
+            batch_obs, batch_acts, batch_log_probs, batch_rews, batch_lens, batch_vals = self.rollout()                     # ALG STEP 3
             
             # Calculate advantage using GAE
-            A_k = self.calculate_gae(batch_rews, batch_vals, batch_dones) 
+            A_k = self.calculate_gae(batch_rews, batch_vals) 
             V = self.critic(batch_obs).squeeze()
             batch_rtgs = A_k + V.detach()   
             
@@ -248,11 +246,11 @@ class PPO:
                 torch.save(self.actor.state_dict(), './ppo_actor.pth')
                 torch.save(self.critic.state_dict(), './ppo_critic.pth')
 
-    def calculate_gae(self, rewards, values, dones):
+    def calculate_gae(self, rewards, values):
         batch_advantages = []  # List to store computed advantages for each timestep
 
         # Iterate over each episode's rewards, values, and done flags
-        for ep_rews, ep_vals, ep_dones in zip(rewards, values, dones):
+        for ep_rews, ep_vals in zip(rewards, values):
             advantages = []  # List to store advantages for the current episode
             last_advantage = 0  # Initialize the last computed advantage
 
@@ -260,13 +258,13 @@ class PPO:
             for t in reversed(range(len(ep_rews))):
                 if t + 1 < len(ep_rews):
                     # Calculate the temporal difference (TD) error for the current timestep
-                    delta = ep_rews[t] + self.gamma * ep_vals[t+1] * (1 - ep_dones[t+1]) - ep_vals[t]
+                    delta = ep_rews[t] + self.gamma * ep_vals[t+1] - ep_vals[t]
                 else:
                     # Special case at the boundary (last timestep)
                     delta = ep_rews[t] - ep_vals[t]
 
                 # Calculate Generalized Advantage Estimation (GAE) for the current timestep
-                advantage = delta + self.gamma * self.lam * (1 - ep_dones[t]) * last_advantage
+                advantage = delta + self.gamma * self.lam * last_advantage
                 last_advantage = advantage  # Update the last advantage for the next timestep
                 advantages.insert(0, advantage)  # Insert advantage at the beginning of the list
 
@@ -285,20 +283,17 @@ class PPO:
         batch_rews = []
         batch_lens = []
         batch_vals = []
-        batch_dones = []
 
         # Episodic data. Keeps track of rewards per episode, will get cleared
         # upon each new episode
         ep_rews = []
         ep_vals = []
-        ep_dones = []
         t = 0 # Keeps track of how many timesteps we've run so far this batch
 
         # Keep simulating until we've run more than or equal to specified timesteps per batch
         while t < self.timesteps_per_batch:
             ep_rews = [] # rewards collected per episode
             ep_vals = [] # state values collected per episode
-            ep_dones = [] # done flag collected per episode
             # Reset the environment. Note that obs is short for observation. 
             obs, _ = self.env.reset()
             # Initially, the game is not done
@@ -306,12 +301,6 @@ class PPO:
 
             # Run an episode for a maximum of max_timesteps_per_episode timesteps
             for ep_t in range(self.max_timesteps_per_episode):
-                # If render is specified, render the environment
-                if self.render:
-                    self.env.render()
-                # Track done flag of the current state
-                ep_dones.append(done)
-
                 t += 1 # Increment timesteps ran this batch so far
 
                 # Track observations in this batch
@@ -338,7 +327,6 @@ class PPO:
             batch_lens.append(ep_t + 1)
             batch_rews.append(ep_rews)
             batch_vals.append(ep_vals)
-            batch_dones.append(ep_dones)
         # Reshape data as tensors in the shape specified in function description, before returning
         batch_obs = torch.tensor(batch_obs, dtype=torch.float)
         batch_acts = torch.tensor(batch_acts, dtype=torch.float)
@@ -349,7 +337,7 @@ class PPO:
         self.logger['batch_lens'] = batch_lens
 
         # Here, we return the batch_rews instead of batch_rtgs for later calculation of GAE
-        return batch_obs, batch_acts, batch_log_probs, batch_rews, batch_lens, batch_vals,batch_dones
+        return batch_obs, batch_acts, batch_log_probs, batch_rews, batch_lens, batch_vals
 
     def get_action(self, obs):
         """
@@ -364,12 +352,12 @@ class PPO:
         """
         # Query the actor network for a mean action
         obs = torch.tensor(obs,dtype=torch.float)
-        mean = self.actor(obs)
+        mean, cov = self.actor(obs)
 
         # Create a distribution with the mean action and std from the covariance matrix above.
         # For more information on how this distribution works, check out Andrew Ng's lecture on it:
         # https://www.youtube.com/watch?v=JjB58InuTqM
-        dist = MultivariateNormal(mean, self.cov_mat)
+        dist = MultivariateNormal(mean, torch.diag_embed(cov))
 
         # Sample an action from the distribution
         action = dist.sample()
@@ -407,8 +395,9 @@ class PPO:
 
         # Calculate the log probabilities of batch actions using most recent actor network.
         # This segment of code is similar to that in get_action()
-        mean = self.actor(batch_obs)
-        dist = MultivariateNormal(mean, self.cov_mat)
+        mean, cov = self.actor(batch_obs)
+
+        dist = MultivariateNormal(mean, torch.diag_embed(cov))
         log_probs = dist.log_prob(batch_acts)
 
         # Return the value vector V of each observation in the batch
@@ -442,7 +431,6 @@ class PPO:
 
 
         # Miscellaneous parameters
-        self.render = False                             # If we should render during rollout
         self.save_freq = 10                             # How often we save in number of iterations
         self.deterministic = False                      # If we're testing, don't sample actions
         self.seed = None								# Sets the seed of our program, used for reproducibility of results
