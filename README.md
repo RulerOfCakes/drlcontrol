@@ -17,3 +17,8 @@ Here are some of the custom environments included in this repository.
 ![ViperX 300 6DOF](assets/viperx.gif)
 
 This environment aims to move the robot arm to grab the box and place it in the target location. It uses the ViperX 300 6DOF robot arm model from Trossen Robotics, provided from the [mujoco-menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/trossen_vx300s) repository.
+
+
+### Spot - Quadruped Robot Forward Locomotion
+
+This environment simulates a simple quadruped robot walking forward. It uses the Spot quadruped robot model from Boston Dynamics, provided from the [mujoco-menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/boston_dynamics_spot) repository.

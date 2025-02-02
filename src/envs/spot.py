@@ -33,7 +33,7 @@ class SpotEnv(MujocoEnv):
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy        ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
         healthy_z_range: Tuple[float, float] = (
-            0.2,
+            0.25,
             1.0,
         ),  # z range for the robot to be healthy
         ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions

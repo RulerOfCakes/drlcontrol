@@ -19,7 +19,7 @@ register(
 )
 
 register(
-    id="SpotEnv-v0",
+    id="Spot-v0",
     entry_point="envs:SpotEnv",
     max_episode_steps=1000,
     reward_threshold=6000.0,
