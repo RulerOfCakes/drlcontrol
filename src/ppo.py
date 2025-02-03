@@ -660,8 +660,8 @@ myppo = PPO(
     lr=2e-4,
     ent_coef=4e-4,
     timestep_per_batch=6000,
-    actor_hidden_dim=256,
-    critic_hidden_dim=256,
+    actor_hidden_dim=512,
+    critic_hidden_dim=512,
     n_updates_per_iteration=10,
     save_freq=10,
 )
