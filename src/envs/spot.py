@@ -29,11 +29,11 @@ class SpotEnv(MujocoEnv):
         xml_file: str = "boston_dynamics_spot/scene.xml",
         frame_skip: int = 5,  # each 'step' of the environment corresponds to 5 timesteps in the simulation
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
-        healthy_reward: float = 0.0,  # reward for staying alive
+        healthy_reward: float = 1.0,  # reward for staying alive
         forward_reward_weight: float = 1.0,  # reward for forward locomotion
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
-        termination_cost: float = 2000.0,  # penalty for terminating the episode early
+        termination_cost: float = 1000.0,  # penalty for terminating the episode early
         healthy_z_range: Tuple[float, float] = (
             0.25,
             1.0,

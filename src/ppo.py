@@ -89,7 +89,7 @@ class PPO:
         critic_hidden_dim=64,
         lr=2.5e-4,
         actor_lr_scale=0.5,
-        gamma=0.995,
+        gamma=0.99,
         clip=0.2,
         lam=0.95,
         num_minibatches=6,
@@ -456,7 +456,7 @@ class PPO:
             batch_lens.append(ep_t + 1)
             batch_rews.append(ep_rews)
             batch_vals.append(ep_vals)
-            
+
         # Reshape data as tensors in the shape specified in function description, before returning
         batch_obs = torch.tensor(batch_obs, dtype=torch.float)
         batch_acts = torch.tensor(batch_acts, dtype=torch.float)
@@ -666,7 +666,7 @@ env = gym.make(
 
 myppo = PPO(
     env,
-    reward_scale=0.005,
+    reward_scale=0.008,
     lr=1.5e-4,
     ent_coef=3e-4,
     timestep_per_batch=8000,
