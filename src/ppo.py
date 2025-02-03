@@ -665,7 +665,7 @@ env = gym.make(
 
 myppo = PPO(
     env,
-    reward_scale=0.01,
+    reward_scale=0.005,
     lr=1.5e-4,
     ent_coef=3e-4,
     timestep_per_batch=8000,
