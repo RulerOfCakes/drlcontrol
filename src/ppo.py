@@ -370,8 +370,7 @@ class PPO:
 
             # Save our model if it's time
             if i_so_far % self.save_freq == 0:
-                torch.save(self.actor.state_dict(), "./ppo_actor.pth")
-                torch.save(self.critic.state_dict(), "./ppo_critic.pth")
+                self.save_model()
 
     def calculate_gae(self, rewards, values):
         batch_advantages = []  # List to store computed advantages for each timestep
@@ -627,6 +626,16 @@ class PPO:
         self.logger["approx_kl"] = []
 
 
+    def save_model(self):
+        torch.save(self.actor.state_dict(), "./ppo_actor.pth")
+        torch.save(self.critic.state_dict(), "./ppo_critic.pth")
+
+    
+    def load_model(self):
+        self.actor.load_state_dict(torch.load("./ppo_actor.pth", weights_only=True))
+        self.critic.load_state_dict(torch.load("./ppo_critic.pth", weights_only=True))
+
+
 # env = gym.make("Pendulum-v1")
 # env = gym.make('Ant-v5')
 # env = gym.make("Hopper-v5")
@@ -666,4 +675,5 @@ myppo = PPO(
     save_freq=10,
 )
 
+myppo.load_model()
 myppo.learn(100000000)
