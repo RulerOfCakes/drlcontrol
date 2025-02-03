@@ -1,6 +1,7 @@
 from typing import Dict, Tuple, Union
 from gymnasium.spaces import Box
 from gymnasium.envs.mujoco import MujocoEnv
+import mujoco
 import numpy as np
 
 DEFAULT_CAMERA_CONFIG = {
@@ -31,7 +32,8 @@ class SpotEnv(MujocoEnv):
         healthy_reward: float = 1.0,  # reward for staying alive
         forward_reward_weight: float = 1.0,  # reward for forward locomotion
         main_body: Union[int, str] = 1,
-        terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy        ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
+        terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
+        termination_cost: float = 500.0,  # penalty for terminating the episode early
         healthy_z_range: Tuple[float, float] = (
             0.25,
             1.0,
@@ -53,6 +55,7 @@ class SpotEnv(MujocoEnv):
         # healthy - robot must fit in a certain height range(e.g. not falling down)
         self._healthy_z_range = healthy_z_range
         self._terminate_when_unhealthy = terminate_when_unhealthy
+        self._termination_cost = termination_cost
 
         self._main_body = main_body
 
@@ -90,6 +93,9 @@ class SpotEnv(MujocoEnv):
         # for observations, we collect the model's qpos and qvel
         obs_size = self.data.qpos.size + self.data.qvel.size
 
+        # we also add a relative angle between the forward vector of the torso and the x-axis
+        obs_size += 1
+
         # we may exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
         obs_size -= 2 * exclude_current_positions_from_observation
 
@@ -100,6 +106,7 @@ class SpotEnv(MujocoEnv):
         self.observation_structure = {
             "qpos": self.data.qpos.size,
             "qvel": self.data.qvel.size,
+            "direction_angle": 1,
             "cfrc_ext": len(self.cfrc_ext) * include_cfrc_ext_in_observation,
         }
 
@@ -114,6 +121,12 @@ class SpotEnv(MujocoEnv):
     @property
     def healthy_reward(self):
         return self.is_healthy * self._healthy_reward
+
+    @property
+    def termination_cost(self):
+        return (
+            self._terminate_when_unhealthy and (not self.is_healthy)
+        ) * self._termination_cost
 
     def control_cost(self, action):
         control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
@@ -140,15 +153,38 @@ class SpotEnv(MujocoEnv):
         is_healthy = np.isfinite(state).all() and min_z <= state[2] <= max_z
         return is_healthy
 
+    # the z component is ignored as the desired direction is in the x-y plane
+    def forward_angle(self):
+        target_vector = np.array([-1, 0])
+
+        rot_matrix_body = self.data.xmat[self._main_body]
+        rot_matrix_body = rot_matrix_body.reshape(3, 3)
+
+        body_forward_vector = rot_matrix_body @ np.array([-1, 0, 0])
+        body_forward_vector = body_forward_vector[:2]
+
+        diff_angle = np.arccos(
+            np.clip(
+                np.dot(target_vector, body_forward_vector),
+                -1.0,
+                1.0,
+            )
+        )
+
+        return diff_angle
+
     def _get_obs(self):
         # get the current state of the robot
         qpos = self.data.qpos.copy()
         qvel = self.data.qvel.copy()
 
+        angle = np.array([self.forward_angle()])
+
         # exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
         if self._exclude_current_positions_from_observation:
             qpos = qpos[2:]
-        obs = np.concatenate([qpos, qvel])
+
+        obs = np.concatenate([qpos, qvel, angle])
 
         # include the external forces acting on the robot
         if self._include_cfrc_ext_in_observation:
@@ -163,7 +199,8 @@ class SpotEnv(MujocoEnv):
 
         ctrl_cost = self.control_cost(action)
         contact_cost = self.contact_cost
-        costs = ctrl_cost + contact_cost
+        termination_cost = self.termination_cost
+        costs = ctrl_cost + contact_cost + termination_cost
 
         reward = rewards - costs
 

@@ -89,9 +89,9 @@ class PPO:
         critic_hidden_dim=64,
         lr=2.5e-4,
         actor_lr_scale=0.5,
-        gamma=0.95,
+        gamma=0.99,
         clip=0.2,
-        lam=0.99,
+        lam=0.95,
         num_minibatches=6,
         ent_coef=0,
         target_kl=0.02,
@@ -656,7 +656,7 @@ env = gym.make(
 
 myppo = PPO(
     env,
-    reward_scale=0.05,
+    reward_scale=0.015,
     lr=2e-4,
     ent_coef=4e-4,
     timestep_per_batch=6000,
