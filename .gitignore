@@ -178,5 +178,4 @@ pyrightconfig.json
 .vscode/
 
 # PPO model save files
-ppo_critic.pth
-ppo_actor.pth
+*.pth
