@@ -33,7 +33,7 @@ class SpotEnv(MujocoEnv):
         forward_reward_weight: float = 1.0,  # reward for forward locomotion
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
-        termination_cost: float = 500.0,  # penalty for terminating the episode early
+        termination_cost: float = 1500.0,  # penalty for terminating the episode early
         healthy_z_range: Tuple[float, float] = (
             0.25,
             1.0,

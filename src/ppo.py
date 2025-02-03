@@ -666,8 +666,8 @@ env = gym.make(
 myppo = PPO(
     env,
     reward_scale=0.01,
-    lr=2e-4,
-    ent_coef=4e-4,
+    lr=1.5e-4,
+    ent_coef=3e-4,
     timestep_per_batch=8000,
     actor_hidden_dim=512,
     critic_hidden_dim=512,
