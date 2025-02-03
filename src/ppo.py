@@ -456,6 +456,7 @@ class PPO:
             batch_lens.append(ep_t + 1)
             batch_rews.append(ep_rews)
             batch_vals.append(ep_vals)
+            
         # Reshape data as tensors in the shape specified in function description, before returning
         batch_obs = torch.tensor(batch_obs, dtype=torch.float)
         batch_acts = torch.tensor(batch_acts, dtype=torch.float)
@@ -675,5 +676,5 @@ myppo = PPO(
     save_freq=10,
 )
 
-myppo.load_model()
+#myppo.load_model()
 myppo.learn(100000000)
