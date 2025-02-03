@@ -89,7 +89,7 @@ class PPO:
         critic_hidden_dim=64,
         lr=2.5e-4,
         actor_lr_scale=0.5,
-        gamma=0.99,
+        gamma=0.995,
         clip=0.2,
         lam=0.95,
         num_minibatches=6,
