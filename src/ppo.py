@@ -657,18 +657,18 @@ models_path = os.path.join(parent_path, "models")
 # )
 
 env = gym.make(
-    "Spot-v0",
+    "Cassie-v0",
     render_mode="human",
     frame_skip=5,
     max_episode_steps=1000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-    xml_file=os.path.join(models_path, "boston_dynamics_spot/scene.xml"),
+    xml_file=os.path.join(models_path, "agility_cassie/scene.xml"),
 )
 
 myppo = PPO(
     env,
     reward_scale=0.008,
     lr=1.5e-4,
-    ent_coef=3e-4,
+    ent_coef=5e-4,
     timestep_per_batch=8000,
     actor_hidden_dim=512,
     critic_hidden_dim=512,
@@ -676,5 +676,5 @@ myppo = PPO(
     save_freq=10,
 )
 
-#myppo.load_model()
+# myppo.load_model()
 myppo.learn(100000000)
