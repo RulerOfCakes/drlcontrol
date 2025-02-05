@@ -1,7 +1,6 @@
 from typing import Dict, Tuple, Union
 from gymnasium.spaces import Box
 from gymnasium.envs.mujoco import MujocoEnv
-import mujoco
 import numpy as np
 
 DEFAULT_CAMERA_CONFIG = {
@@ -9,9 +8,9 @@ DEFAULT_CAMERA_CONFIG = {
 }
 
 
-class SpotEnv(MujocoEnv):
+class CassieEnv(MujocoEnv):
     """
-    SpotEnv uses the Spot Quadruped developed by Boston Dynamics.
+    CassieEnv uses the Cassie bipedal robot from Agility Robotics.
 
     The goal of this environment is to achieve stable forward locomotion.
     """
@@ -26,19 +25,19 @@ class SpotEnv(MujocoEnv):
 
     def __init__(
         self,
-        xml_file: str = "boston_dynamics_spot/scene.xml",
+        xml_file: str = "agility_cassie/scene.xml",
         frame_skip: int = 5,  # each 'step' of the environment corresponds to 5 timesteps in the simulation
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
-        healthy_reward: float = 1.0,  # reward for staying alive
+        healthy_reward: float = 5.0,  # reward for staying alive
         forward_reward_weight: float = 1.0,  # reward for forward locomotion
         main_body: Union[int, str] = 1,
-        terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
+        terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy        ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
         termination_cost: float = 1000.0,  # penalty for terminating the episode early
         healthy_z_range: Tuple[float, float] = (
-            0.25,
-            1.0,
+            0.5,
+            2.0,
         ),  # z range for the robot to be healthy
-        ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
+        ctrl_cost_weight: float = 0.0,  # penalize large/jerky actions
         contact_cost_weight: float = 0.0005,  # penalize contacts with the ground
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
@@ -69,7 +68,7 @@ class SpotEnv(MujocoEnv):
         )
         self._include_cfrc_ext_in_observation = include_cfrc_ext_in_observation
 
-        self.metadata = SpotEnv.metadata
+        self.metadata = CassieEnv.metadata
 
         MujocoEnv.__init__(
             self,
@@ -93,9 +92,6 @@ class SpotEnv(MujocoEnv):
         # for observations, we collect the model's qpos and qvel
         obs_size = self.data.qpos.size + self.data.qvel.size
 
-        # we also add a relative angle between the forward vector of the torso and the x-axis
-        obs_size += 1
-
         # we may exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
         obs_size -= 2 * exclude_current_positions_from_observation
 
@@ -106,7 +102,6 @@ class SpotEnv(MujocoEnv):
         self.observation_structure = {
             "qpos": self.data.qpos.size,
             "qvel": self.data.qvel.size,
-            "direction_angle": 1,
             "cfrc_ext": len(self.cfrc_ext) * include_cfrc_ext_in_observation,
         }
 
@@ -155,12 +150,12 @@ class SpotEnv(MujocoEnv):
 
     # the z component is ignored as the desired direction is in the x-y plane
     def forward_angle(self):
-        target_vector = np.array([-1, 0])
+        target_vector = np.array([1, 0])
 
         rot_matrix_body = self.data.xmat[self._main_body]
         rot_matrix_body = rot_matrix_body.reshape(3, 3)
 
-        body_forward_vector = rot_matrix_body @ np.array([-1, 0, 0])
+        body_forward_vector = rot_matrix_body @ np.array([1, 0, 0])
         body_forward_vector = body_forward_vector[:2]
 
         diff_angle = np.arccos(
@@ -178,13 +173,10 @@ class SpotEnv(MujocoEnv):
         qpos = self.data.qpos.copy()
         qvel = self.data.qvel.copy()
 
-        angle = np.array([self.forward_angle()])
-
         # exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
         if self._exclude_current_positions_from_observation:
             qpos = qpos[2:]
-
-        obs = np.concatenate([qpos, qvel, angle])
+        obs = np.concatenate([qpos, qvel])
 
         # include the external forces acting on the robot
         if self._include_cfrc_ext_in_observation:
