@@ -22,3 +22,7 @@ This environment aims to move the robot arm to grab the box and place it in the 
 ### Spot - Quadruped Robot Forward Locomotion
 
 This environment simulates a simple quadruped robot walking forward. It uses the Spot quadruped robot model from Boston Dynamics, provided from the [mujoco-menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/boston_dynamics_spot) repository.
+
+### Cassie - Bipedal Robot Forward Locomotion
+
+This environment simulates a simple bipedal robot walking forward. It uses the Cassie bipedal robot model from Agility Robotics, provided from the [mujoco-menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/agility_cassie) repository.
