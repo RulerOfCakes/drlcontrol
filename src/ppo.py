@@ -626,12 +626,10 @@ class PPO:
         self.logger["entropy_losses"] = []
         self.logger["approx_kl"] = []
 
-
     def save_model(self):
         torch.save(self.actor.state_dict(), "./ppo_actor.pth")
         torch.save(self.critic.state_dict(), "./ppo_critic.pth")
 
-    
     def load_model(self):
         self.actor.load_state_dict(torch.load("./ppo_actor.pth", weights_only=True))
         self.critic.load_state_dict(torch.load("./ppo_critic.pth", weights_only=True))
@@ -657,11 +655,11 @@ models_path = os.path.join(parent_path, "models")
 # )
 
 env = gym.make(
-    "Cassie-v0",
-    render_mode="human",
+    "Spot-v1",
+    # render_mode="human",
     frame_skip=5,
-    max_episode_steps=1000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-    xml_file=os.path.join(models_path, "agility_cassie/scene.xml"),
+    max_episode_steps=2000,  # physics steps will have been multiplied by 5, due to the frame_skip value
+    xml_file=os.path.join(models_path, "boston_dynamics_spot/scene_v1.xml"),
 )
 
 myppo = PPO(
