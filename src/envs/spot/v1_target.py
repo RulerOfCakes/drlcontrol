@@ -29,8 +29,7 @@ class SpotEnvV1(MujocoEnv):
         xml_file: str = "boston_dynamics_spot/scene_v1.xml",
         frame_skip: int = 5,  # each 'step' of the environment corresponds to 5 timesteps in the simulation
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
-        healthy_reward: float = 1.0,  # reward for staying alive
-        forward_reward_weight: float = 5.0,  # reward for getting closer to the target
+        forward_reward_weight: float = 10.0,  # reward for getting closer to the target
         success_reward_weight: float = 10000.0,  # reward for reaching the target
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
@@ -40,7 +39,6 @@ class SpotEnvV1(MujocoEnv):
             1.0,
         ),  # z range for the robot to be healthy
         ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
-        contact_cost_weight: float = 0.0005,  # penalize contacts with the ground
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
         exclude_current_positions_from_observation: bool = True,
@@ -53,10 +51,8 @@ class SpotEnvV1(MujocoEnv):
         **kwargs,
     ):
         # initialize the environment variables
-        self._healthy_reward = healthy_reward
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
-        self._contact_cost_weight = contact_cost_weight
         self._success_reward_weight = success_reward_weight
 
         # healthy - robot must fit in a certain height range(e.g. not falling down)
@@ -137,10 +133,6 @@ class SpotEnvV1(MujocoEnv):
         return self.data.cfrc_ext[1:]
 
     @property
-    def healthy_reward(self):
-        return self.is_healthy * self._healthy_reward
-
-    @property
     def termination_cost(self):
         return (
             self._terminate_when_unhealthy and (not self.is_healthy)
@@ -156,13 +148,6 @@ class SpotEnvV1(MujocoEnv):
         min_value, max_value = self._contact_force_range
         contact_forces = np.clip(raw_contact_forces, min_value, max_value)
         return contact_forces
-
-    @property
-    def contact_cost(self):
-        contact_cost = self._contact_cost_weight * np.sum(
-            np.square(self.contact_forces)
-        )
-        return contact_cost
 
     @property
     def is_healthy(self):
@@ -212,16 +197,14 @@ class SpotEnvV1(MujocoEnv):
             self.target_pos - self.data.body(self._main_body).xpos[:2]
         )
 
-        forward_reward = self._forward_reward_weight * np.exp(-distance_to_target)
+        forward_reward = self._forward_reward_weight * -distance_to_target
 
-        healthy_reward = self.healthy_reward
         success_reward = self.success_reward
-        rewards = forward_reward + healthy_reward + success_reward
+        rewards = forward_reward + success_reward
 
         ctrl_cost = self.control_cost(action)
-        contact_cost = self.contact_cost
         termination_cost = self.termination_cost
-        costs = ctrl_cost + contact_cost + termination_cost
+        costs = ctrl_cost + termination_cost
 
         reward = rewards - costs
 
@@ -229,9 +212,7 @@ class SpotEnvV1(MujocoEnv):
             "reward_forward": forward_reward,
             "reward_success": success_reward,
             "reward_ctrl": -ctrl_cost,
-            "reward_contact": -contact_cost,
             "reward_termination": -termination_cost,
-            "reward_survive": healthy_reward,
         }
 
         return reward, reward_info
