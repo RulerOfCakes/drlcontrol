@@ -30,7 +30,7 @@ class SpotEnvV1(MujocoEnv):
         frame_skip: int = 5,  # each 'step' of the environment corresponds to 5 timesteps in the simulation
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
         healthy_reward: float = 1.0,  # reward for staying alive
-        forward_reward_weight: float = 1.0,  # reward for getting closer to the target
+        forward_reward_weight: float = 5.0,  # reward for getting closer to the target
         success_reward_weight: float = 10000.0,  # reward for reaching the target
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
@@ -69,7 +69,7 @@ class SpotEnvV1(MujocoEnv):
         self._target_range_increment = target_range_increment
         self._increment_frequency = increment_frequency
         self._steps = 0
-        
+
         self._randomize_target_position = randomize_target_position
         self.target_pos = self._generate_target_position()
 
@@ -174,9 +174,9 @@ class SpotEnvV1(MujocoEnv):
     @property
     def goal_reached(self) -> bool:
         distance_to_target = np.linalg.norm(
-            self.target_pos - self.data.body(self._main_body).xpos[:2], ord=2
+            self.target_pos - self.data.body(self._main_body).xpos[:2]
         )
-        return distance_to_target < 0.5
+        return distance_to_target < 0.2
 
     @property
     def success_reward(self):
@@ -207,43 +207,12 @@ class SpotEnvV1(MujocoEnv):
 
         return obs
 
-    def get_body_global_velocity(self, body_id):
-        """Gets the full linear velocity of a body in the global frame."""
-        vel = np.zeros(6, dtype=np.float64)
-        mujoco.mj_objectVelocity(
-            self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, body_id, vel, 0
-        )
-        return vel[3:]  # Return only linear velocity (global frame)
-
-    def get_local_forward_velocity(self, body_id):
-        """
-        Calculates the forward velocity in the robot's local frame.
-        The dot projection is necessary due to potential rotations to the local frame of the body
-        """
-
-        # 1. Get Global Velocity
-        global_velocity = self.get_body_global_velocity(body_id)
-
-        # 2. Get Local Forward Vector (from rotation matrix)
-        rot_matrix = self.data.body(body_id).xmat.reshape(3, 3)
-        local_forward_vector = -rot_matrix[
-            :, 0
-        ]  # First column is forward (x-axis in local frame)
-
-        # 3. Project Global Velocity onto Local Forward Vector
-        forward_velocity = np.dot(global_velocity, local_forward_vector)
-
-        return forward_velocity
-
     def _get_rew(self, action):
         distance_to_target = np.linalg.norm(
-            self.target_pos - self.data.body(self._main_body).xpos[:2], ord=2
+            self.target_pos - self.data.body(self._main_body).xpos[:2]
         )
 
-        x_velocity = self.get_local_forward_velocity(self._main_body)
-        forward_reward = (
-            self._forward_reward_weight * x_velocity * np.exp(-distance_to_target)
-        )
+        forward_reward = self._forward_reward_weight * np.exp(-distance_to_target)
 
         healthy_reward = self.healthy_reward
         success_reward = self.success_reward
@@ -269,12 +238,12 @@ class SpotEnvV1(MujocoEnv):
 
     def step(self, action):
         self.do_simulation(action, self.frame_skip)
-        
+
         self._steps += 1
         if self._steps % self._increment_frequency == 0:
-            self._target_range = min (
+            self._target_range = min(
                 self._target_range + self._target_range_increment,
-                self._max_target_range
+                self._max_target_range,
             )
 
         observation = self._get_obs()
