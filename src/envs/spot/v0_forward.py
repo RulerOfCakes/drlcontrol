@@ -69,7 +69,7 @@ class SpotEnvV0(MujocoEnv):
         )
         self._include_cfrc_ext_in_observation = include_cfrc_ext_in_observation
 
-        self.metadata = SpotEnv.metadata
+        self.metadata = SpotEnvV0.metadata
 
         MujocoEnv.__init__(
             self,
