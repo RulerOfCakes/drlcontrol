@@ -132,7 +132,6 @@ class SpotEnvV1(MujocoEnv):
             low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64
         )
 
-
     @property
     def cfrc_ext(self):
         return self.data.cfrc_ext[1:]
@@ -179,7 +178,7 @@ class SpotEnvV1(MujocoEnv):
         """
 
         body_rotation = self.data.body(self._main_body).xmat.reshape(3, 3)
-        
+
         # Extract the forward direction of the robot
         forward_direction = body_rotation[:, 0]  # Assuming forward is along the x-axis
         forward_direction = (
@@ -188,7 +187,7 @@ class SpotEnvV1(MujocoEnv):
             else np.zeros_like(forward_direction)
         )
         # omit the z coordinate
-        forward_direction = forward_direction[:2] 
+        forward_direction = forward_direction[:2]
 
         # Calculate the target direction
         target_direction = self.target_pos - self.data.body(self._main_body).xpos[:2]
@@ -197,7 +196,7 @@ class SpotEnvV1(MujocoEnv):
             if np.linalg.norm(target_direction) > 0
             else np.zeros_like(target_direction)
         )
-        
+
         return (
             np.square(np.dot(forward_direction, target_direction))
             * self._angular_reward_weight
@@ -303,7 +302,6 @@ class SpotEnvV1(MujocoEnv):
         self.model.site_pos[self.target_site_id] = np.concatenate(
             [self.target_pos, [0.1]]
         )  # Adjust Z as needed
-
 
     def reset_model(self):
         noise_low = -self._reset_noise_scale

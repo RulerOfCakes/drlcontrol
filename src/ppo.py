@@ -1,7 +1,7 @@
 """
-    The file contains the PPO class to train with.
-    NOTE: All "ALG STEP"s are following the numbers from the original PPO pseudocode.
-            It can be found here: https://spinningup.openai.com/en/latest/_images/math/e62a8971472597f4b014c2da064f636ffe365ba3.svg
+The file contains the PPO class to train with.
+NOTE: All "ALG STEP"s are following the numbers from the original PPO pseudocode.
+        It can be found here: https://spinningup.openai.com/en/latest/_images/math/e62a8971472597f4b014c2da064f636ffe365ba3.svg
 """
 
 import time
@@ -81,7 +81,7 @@ class PPO:
 
     def __init__(
         self,
-        env,
+        env: gym.Env,
         timestep_per_batch=4800,
         max_timesteps_per_episode=3200,
         n_updates_per_iteration=5,
