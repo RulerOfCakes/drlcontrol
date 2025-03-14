@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Dict, Union
+from dataclasses import dataclass, field
+from typing import Dict, List, Union
 from gymnasium.spaces import Box
 from gymnasium.envs.mujoco import MujocoEnv
 import mujoco
@@ -20,11 +20,11 @@ class LeggedInitConfig:
 @dataclass
 class LeggedBodyConfig:
     main_body: Union[int, str] = 1
-    termination_contacts: list[Union[int, str]] = (
-        list()
+    termination_contacts: List[Union[int, str]] = field(
+        default_factory=list
     )  # body contacts that terminate the episode
-    penalized_contacts: list[Union[int, str]] = (
-        list()
+    penalized_contacts: List[Union[int, str]] = field(
+        default_factory=list
     )  # body contacts that are penalized in the reward function
 
 
@@ -113,15 +113,13 @@ class LeggedEnv(MujocoEnv):
         # for observations, we collect the model's qpos and qvel
         obs_size = self.data.qpos.size + self.data.qvel.size
 
-        # we also add a relative target position vector (x,y)
-        obs_size += 2
-
         # we may exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
         obs_size -= 2 * self.obs_cfg.exclude_current_positions_from_observation
 
         # we may include the external forces acting on the robot
         obs_size += (
-            len(self.data.cfrc_ext) * self.obs_cfg.include_cfrc_ext_in_observation
+            len(self.data.cfrc_ext.ravel())
+            * self.obs_cfg.include_cfrc_ext_in_observation
         )
 
         # metadata for the final observation space
@@ -130,7 +128,7 @@ class LeggedEnv(MujocoEnv):
             "qpos": self.data.qpos.size
             - 2 * self.obs_cfg.exclude_current_positions_from_observation,
             "qvel": self.data.qvel.size,
-            "cfrc_ext": len(self.data.cfrc_ext)
+            "cfrc_ext": len(self.data.cfrc_ext.ravel())
             * self.obs_cfg.include_cfrc_ext_in_observation,
         }
 
@@ -142,6 +140,10 @@ class LeggedEnv(MujocoEnv):
 
     @property
     def contact_forces(self):
+        """
+        Returns a 2D array of contact forces acting on the robot,
+        in the order of force x, y, z and torque x, y, z for each body.
+        """
         raw_contact_forces = self.data.cfrc_ext
         min_value, max_value = self.obs_cfg.contact_force_range
         contact_forces = np.clip(raw_contact_forces, min_value, max_value)
@@ -153,8 +155,9 @@ class LeggedEnv(MujocoEnv):
         Check if the episode is terminated based on the contacts with the ground.
         """
         # Check for contacts with the ground
-        contact_forces = self.contact_forces
-        return np.any(np.abs(contact_forces[self._termination_contact_indices]) > 0)
+        return np.any(
+            np.abs(self.contact_forces[self._termination_contact_indices].flatten()) > 0
+        )
 
     ### Rewards
     def _reward_collision(self) -> float:
@@ -162,9 +165,9 @@ class LeggedEnv(MujocoEnv):
         Penalize the robot for collisions.
         """
         contact_forces = self.contact_forces
-        penalized_contact_forces = np.abs(
-            contact_forces[self._penalized_contact_indices]
-        )
+        penalized_contact_forces = np.array(
+            [np.abs(arr) for arr in contact_forces[self._penalized_contact_indices]]
+        ).flatten()
         return np.sum(penalized_contact_forces)
 
     def _reward_control(self, action: np.ndarray) -> float:

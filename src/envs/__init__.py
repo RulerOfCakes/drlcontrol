@@ -34,6 +34,13 @@ register(
 )
 
 register(
+    id="Spot-v2",
+    entry_point="envs:SpotEnvV2",
+    max_episode_steps=1000,
+    reward_threshold=6000.0,
+)
+
+register(
     id="Cassie-v0",
     entry_point="envs:CassieEnv",
     max_episode_steps=1000,
