@@ -38,7 +38,7 @@ class SpotEnvV0(MujocoEnv):
             0.25,
             1.0,
         ),  # z range for the robot to be healthy
-        ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
+        ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
         contact_cost_weight: float = 0.0005,  # penalize contacts with the ground
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
