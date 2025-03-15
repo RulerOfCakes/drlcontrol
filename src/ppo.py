@@ -23,6 +23,9 @@ import numpy as np
 import envs, os
 
 
+from RealTimePlot import MultiRealTimePlot
+
+
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     if isinstance(layer, nn.Linear):
         nn.init.orthogonal_(layer.weight, std)
@@ -81,7 +84,8 @@ class PPO:
 
     def __init__(
         self,
-        env: gym.Env,
+        env,
+        show_graph=True,
         timestep_per_batch=4800,
         max_timesteps_per_episode=3200,
         n_updates_per_iteration=5,
@@ -192,6 +196,33 @@ class PPO:
             "approx_kl": [],  # approximated KL-divergence in current iteration
             "lr": 0,
         }
+
+        # get reward info
+        _, _ = self.env.reset()
+        _, _, _, _, info = self.env.step(self.env.action_space.sample())
+
+        self.iter_info = {}
+
+        for i, key in enumerate(info):
+            self.iter_info[key] = []
+
+        self.show_graph = show_graph
+        if self.show_graph:
+            self.multi_plot = MultiRealTimePlot()
+
+            self.multi_plot.add_plot('avg_ep_lens', xlabel='Iteration', ylabel='Average Episodic Length', title='Average Episodic Length')
+            self.multi_plot.add_plot('avg_ep_rews', xlabel='Iteration', ylabel='Average Episodic Return', title='Average Episodic Return')
+            self.multi_plot.add_plot('avg_batch_return', xlabel='Iteration', ylabel='Average Batch Return (By GAE)', title='Average Batch Return (By GAE)')
+            self.multi_plot.add_plot('est_batch_return', xlabel='Iteration', ylabel='Estimated Batch Return (By Critic Network)', title='Estimated Batch Return (By Critic Network)')
+            self.multi_plot.add_plot('explained_variance', xlabel='Iteration', ylabel='Explained Variance', title='Explained Variance')
+            self.multi_plot.add_plot('avg_actor_loss', xlabel='Iteration', ylabel='Average Actor Loss', title='Average Actor Loss')
+            self.multi_plot.add_plot('avg_critic_loss', xlabel='Iteration', ylabel='Average Critic Loss', title='Average Critic Loss')
+            self.multi_plot.add_plot('avg_entropy_loss', xlabel='Iteration', ylabel='Average Entropy Loss', title='Average Entropy Loss')
+            self.multi_plot.add_plot('avg_approx_kl', xlabel='Iteration', ylabel='KL Divergence Approximation', title='KL Divergence Approximation')
+            self.multi_plot.add_plot('delta_t', xlabel='Iteration', ylabel='Time Taken', title='Time Taken')
+
+            for i, key in enumerate(info):
+                self.multi_plot.add_plot(key, xlabel='Iteration', ylabel=key, title=key)
 
     def learn(self, total_timesteps):
         """
@@ -440,13 +471,17 @@ class PPO:
                 action, log_prob = self.get_action(obs)
                 val = self.critic(obs)
 
-                obs, rew, terminated, truncated, _ = self.env.step(action)
+                obs, rew, terminated, truncated, info = self.env.step(action)
                 done = terminated or truncated
+
                 # Track recent reward, action, and action log probability
                 ep_rews.append(rew * self.reward_scale)
                 ep_vals.append(val.flatten())
                 batch_acts.append(action)
                 batch_log_probs.append(log_prob)
+
+                for i, key in enumerate(info):
+                    self.iter_info[key].append(info[key])
 
                 # If the environment tells us the episode is terminated, break
                 if done:
@@ -559,7 +594,6 @@ class PPO:
         delta_t = self.logger["delta_t"]
         self.logger["delta_t"] = time.time_ns()
         delta_t = (self.logger["delta_t"] - delta_t) / 1e9
-        delta_t = str(round(delta_t, 2))
 
         t_so_far = self.logger["t_so_far"]
         i_so_far = self.logger["i_so_far"]
@@ -582,6 +616,25 @@ class PPO:
             [divergence.float().mean() for divergence in self.logger["approx_kl"]]
         )
 
+
+        # log to graph before converting values to string
+
+        if self.show_graph:
+            self.multi_plot.add_value('avg_ep_lens', i_so_far, avg_ep_lens.item())
+            self.multi_plot.add_value('avg_ep_rews', i_so_far, avg_ep_rews.item())
+            self.multi_plot.add_value('avg_batch_return', i_so_far, self.logger['avg_batch_return'])
+            self.multi_plot.add_value('est_batch_return', i_so_far, self.logger['avg_batch_est'])
+            self.multi_plot.add_value('explained_variance', i_so_far, self.logger['explained_variance'])
+            self.multi_plot.add_value('avg_actor_loss', i_so_far, avg_actor_loss.item())
+            self.multi_plot.add_value('avg_critic_loss', i_so_far, avg_critic_loss.item())
+            self.multi_plot.add_value('avg_entropy_loss', i_so_far, avg_entropy_loss.item())
+            self.multi_plot.add_value('avg_approx_kl', i_so_far, avg_approx_kl.item())
+            self.multi_plot.add_value('delta_t', i_so_far, delta_t)
+
+            for i, key in enumerate(self.iter_info):
+                self.multi_plot.add_value(key, i_so_far, np.mean(self.iter_info[key]).item())
+
+
         # Round decimal places for more aesthetic logging messages
         avg_ep_lens = f"{avg_ep_lens:.2f}"
         avg_ep_rews = f"{avg_ep_rews:.2f}"
@@ -601,7 +654,7 @@ class PPO:
             flush=True,
         )
         print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
-        print(f"Average Episodic Return: {avg_ep_rews}", flush=True)
+        print(f"Average Episodic Reward: {avg_ep_rews}", flush=True)
         print(f"Average Batch Return (By GAE): {avg_batch_return}", flush=True)
         print(
             f"Estimated Batch Return (By Critic Network): {est_batch_return}",
@@ -613,7 +666,7 @@ class PPO:
         print(f"Average Entropy Loss: {avg_entropy_loss}", flush=True)
         print(f"KL Divergence Approximation: {avg_approx_kl}", flush=True)
         print(f"Timesteps So Far: {t_so_far}", flush=True)
-        print(f"Iteration took: {delta_t} secs", flush=True)
+        print(f"Iteration took: {str(round(delta_t, 2))} secs", flush=True)
         print(f"Learning rate: {lr}", flush=True)
         print(f"------------------------------------------------------", flush=True)
         print(flush=True)
@@ -625,6 +678,9 @@ class PPO:
         self.logger["critic_losses"] = []
         self.logger["entropy_losses"] = []
         self.logger["approx_kl"] = []
+        
+        for i, key in enumerate(self.iter_info):
+            self.iter_info[key] = []
 
     def save_model(self):
         torch.save(self.actor.state_dict(), "./ppo_actor.pth")
@@ -667,7 +723,7 @@ myppo = PPO(
     reward_scale=0.008,
     lr=1.5e-4,
     ent_coef=5e-4,
-    timestep_per_batch=8000,
+    timestep_per_batch=2000,
     actor_hidden_dim=512,
     critic_hidden_dim=512,
     n_updates_per_iteration=10,

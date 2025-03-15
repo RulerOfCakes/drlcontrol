@@ -46,9 +46,9 @@ class SpotEnvV1(MujocoEnv):
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
         exclude_current_positions_from_observation: bool = True,
         include_cfrc_ext_in_observation: bool = False,
-        max_target_range=5.0,  # absolute coordinate(x, y) range for the target position
+        max_target_range=10.0,  # absolute coordinate(x, y) range for the target position
         randomize_target_position: bool = True,
-        initial_target_range: float = 1.0,
+        initial_target_range: float = 2.0,
         target_range_increment: float = 0.1,
         increment_frequency: int = 1000,  # Environment steps per increment (# of calls to `step()`)
         **kwargs,
@@ -204,8 +204,11 @@ class SpotEnvV1(MujocoEnv):
 
     # z coordinate is omitted as the robot is expected to move in the x-y plane
     def _generate_target_position(self):
-        x = self.np_random.uniform(low=-self._target_range, high=self._target_range)
-        y = self.np_random.uniform(low=-self._target_range, high=self._target_range)
+        r = self.np_random.uniform(low=1.0, high=self._target_range)
+        theta = self.np_random.uniform(low=0, high=2 * np.pi)
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+
         return np.array([x, y], dtype=np.float32)
 
     def _get_obs(self):
