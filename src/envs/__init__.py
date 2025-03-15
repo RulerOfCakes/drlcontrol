@@ -3,6 +3,7 @@ from envs.viperx import ViperXEnv
 from envs.spot import *
 from envs.cassie import CassieEnv
 from envs.go2 import *
+from envs.legged import LeggedForwardEnv, LeggedTargetEnv
 
 from gymnasium.envs.registration import register
 
@@ -51,6 +52,22 @@ register(
 register(
     id="Cassie-v0",
     entry_point="envs:CassieEnv",
+    max_episode_steps=1000,
+    reward_threshold=6000.0,
+)
+
+# Generalized Environments for legged robots
+
+register(
+    id="LeggedForwardEnv",
+    entry_point="envs:LeggedForwardEnv",
+    max_episode_steps=1000,
+    reward_threshold=6000.0,
+)
+
+register(
+    id="LeggedTargetEnv",
+    entry_point="envs:LeggedTargetEnv",
     max_episode_steps=1000,
     reward_threshold=6000.0,
 )

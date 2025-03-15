@@ -655,11 +655,11 @@ models_path = os.path.join(parent_path, "models")
 # )
 
 env = gym.make(
-    "Spot-v2",
+    "LeggedTargetEnv",
     render_mode="human",
     frame_skip=5,
     max_episode_steps=2000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-    xml_file=os.path.join(models_path, "boston_dynamics_spot/scene_smooth_perlin.xml"),
+    xml_file=os.path.join(models_path, "ant_target.xml"),
 )
 
 myppo = PPO(
