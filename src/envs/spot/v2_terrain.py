@@ -38,8 +38,8 @@ class SpotEnvV2(LeggedEnv):
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
         termination_cost: float = 1000.0,  # penalty for terminating the episode early
-        ctrl_cost_weight: float = 0.1,  # penalize large/jerky actions
-        action_rate_cost_weight: float = 0.1,  # penalize actions that greatly differ from the previous action
+        ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
+        action_rate_cost_weight: float = 0.02,  # penalize actions that greatly differ from the previous action
         terrain_profile_radius: float = 2.0,  # radius of the terrain profile around the robot
         terrain_profile_resolution: int = 5,  # resolution of the terrain profile
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
