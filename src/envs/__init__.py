@@ -2,6 +2,7 @@ from envs.ant import CustomAntEnv
 from envs.viperx import ViperXEnv
 from envs.spot import *
 from envs.cassie import CassieEnv
+from envs.go2 import *
 
 from gymnasium.envs.registration import register
 
@@ -15,6 +16,13 @@ register(
 register(
     id="ViperX-v0",
     entry_point="envs:ViperXEnv",
+    max_episode_steps=1000,
+    reward_threshold=6000.0,
+)
+
+register(
+    id="Go-v0",
+    entry_point="envs:GoEnvV0",
     max_episode_steps=1000,
     reward_threshold=6000.0,
 )
