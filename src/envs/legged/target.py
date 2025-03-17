@@ -30,15 +30,14 @@ class LeggedTargetEnv(MujocoEnv):
         xml_file: str = "ant_target.xml",
         frame_skip: int = 5,  # each 'step' of the environment corresponds to 5 timesteps in the simulation
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
-        forward_reward_weight: float = 10.0,  # reward for getting closer to the target
-        angular_reward_weight: float = 20.0,  # reward for aligning the forward vector towards target direction
-        success_reward_weight: float = 10000.0,  # reward for reaching the target
+        forward_reward_weight: float = 2.0,  # reward for getting closer to the target
+        success_reward_weight: float = 1000.0,  # reward for reaching the target
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
-        termination_cost: float = 10000.0,  # penalty for terminating the episode early
+        termination_cost: float = 1000.0,  # penalty for terminating the episode early
         healthy_z_range: Tuple[float, float] = (
-            0.25,
-            1.0,
+            0.3,
+            1.3,
         ),  # z range for the robot to be healthy
         ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
@@ -54,7 +53,6 @@ class LeggedTargetEnv(MujocoEnv):
     ):
         # initialize the environment variables
         self._forward_reward_weight = forward_reward_weight
-        self._angular_reward_weight = angular_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
         self._success_reward_weight = success_reward_weight
 
@@ -131,6 +129,10 @@ class LeggedTargetEnv(MujocoEnv):
             low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64
         )
 
+        self._prev_pos = (
+            self.data.body(self._main_body).xpos[:2].copy()
+        )  # previous position of the robot
+
     @property
     def cfrc_ext(self):
         return self.data.cfrc_ext[1:]
@@ -171,35 +173,15 @@ class LeggedTargetEnv(MujocoEnv):
         return self.goal_reached * self._success_reward_weight
 
     @property
-    def angular_reward(self):
-        """
-        Return a reward value encouraging the policy to align the forward vector of the robot towards the target direction.
-        """
+    def forward_reward(self):
+        current_pos = self.data.body(self._main_body).xpos[:2].copy()
+        displacement = current_pos - self._prev_pos
+        target_direction = self.target_pos - current_pos
+        target_direction /= np.linalg.norm(target_direction)
 
-        body_rotation = self.data.body(self._main_body).xmat.reshape(3, 3)
-
-        # Extract the forward direction of the robot
-        forward_direction = body_rotation[:, 0]  # Assuming forward is along the x-axis
-        forward_direction = (
-            forward_direction / np.linalg.norm(forward_direction)
-            if np.linalg.norm(forward_direction) > 0
-            else np.zeros_like(forward_direction)
-        )
-        # omit the z coordinate
-        forward_direction = forward_direction[:2]
-
-        # Calculate the target direction
-        target_direction = self.target_pos - self.data.body(self._main_body).xpos[:2]
-        target_direction = (
-            target_direction / np.linalg.norm(target_direction)
-            if np.linalg.norm(target_direction) > 0
-            else np.zeros_like(target_direction)
-        )
-
-        return (
-            np.square(np.dot(forward_direction, target_direction))
-            * self._angular_reward_weight
-        )
+        # reward for moving in the direction of the target
+        displacement_on_target_direction = np.dot(displacement, target_direction)
+        return self._forward_reward_weight * displacement_on_target_direction
 
     # z coordinate is omitted as the robot is expected to move in the x-y plane
     def _generate_target_position(self):
@@ -227,14 +209,9 @@ class LeggedTargetEnv(MujocoEnv):
         return obs
 
     def _get_rew(self, action):
-        distance_to_target = np.linalg.norm(
-            self.target_pos - self.data.body(self._main_body).xpos[:2]
-        )
-
-        forward_reward = self._forward_reward_weight * -distance_to_target
-        angular_reward = self.angular_reward
+        forward_reward = self.forward_reward
         success_reward = self.success_reward
-        rewards = forward_reward + angular_reward + success_reward
+        rewards = forward_reward + success_reward
 
         ctrl_cost = self.control_cost(action)
         termination_cost = self.termination_cost
@@ -244,11 +221,12 @@ class LeggedTargetEnv(MujocoEnv):
 
         reward_info = {
             "reward_forward": forward_reward,
-            "reward_angular": angular_reward,
             "reward_success": success_reward,
             "reward_ctrl": -ctrl_cost,
             "reward_termination": -termination_cost,
         }
+
+        self._prev_pos = self.data.body(self._main_body).xpos[:2].copy()
 
         return reward, reward_info
 
@@ -320,5 +298,4 @@ class LeggedTargetEnv(MujocoEnv):
         self.set_state(qpos, qvel)
 
         observation = self._get_obs()
-
         return observation
