@@ -1,15 +1,21 @@
-from typing import Dict, Tuple, Union
+from typing import Dict, List, Tuple, Union
 from gymnasium.spaces import Box
-from gymnasium.envs.mujoco import MujocoEnv
 import mujoco
 import numpy as np
+
+from envs.legged.base import (
+    LeggedBodyConfig,
+    LeggedEnv,
+    LeggedInitConfig,
+    LeggedObsConfig,
+)
 
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
 
 
-class LeggedTargetEnv(MujocoEnv):
+class LeggedTargetEnv(LeggedEnv):
     """
     Can use any legged robot model, with the forward direction assumed to be +x.
 
@@ -32,14 +38,11 @@ class LeggedTargetEnv(MujocoEnv):
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
         forward_reward_weight: float = 2.0,  # reward for getting closer to the target
         success_reward_weight: float = 1000.0,  # reward for reaching the target
+        termination_cost: float = 1000.0,  # penalty for terminating the episode early
+        ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
-        termination_cost: float = 1000.0,  # penalty for terminating the episode early
-        healthy_z_range: Tuple[float, float] = (
-            0.3,
-            1.3,
-        ),  # z range for the robot to be healthy
-        ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
+        termination_contacts: List[Union[int, str]] = [1],
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
         exclude_current_positions_from_observation: bool = True,
@@ -51,15 +54,28 @@ class LeggedTargetEnv(MujocoEnv):
         increment_frequency: int = 1000,  # Environment steps per increment (# of calls to `step()`)
         **kwargs,
     ):
-        # initialize the environment variables
+        # initialize the reward variables
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
         self._success_reward_weight = success_reward_weight
-
-        # healthy - robot must fit in a certain height range(e.g. not falling down)
-        self._healthy_z_range = healthy_z_range
-        self._terminate_when_unhealthy = terminate_when_unhealthy
         self._termination_cost = termination_cost
+
+        self._terminate_when_unhealthy = terminate_when_unhealthy
+
+        # configuration for base LeggedEnv
+        init_cfg = LeggedInitConfig(
+            reset_noise_scale=reset_noise_scale,
+        )
+        body_cfg = LeggedBodyConfig(
+            main_body=main_body,
+            termination_contacts=termination_contacts,
+            penalized_contacts=[],
+        )
+        obs_cfg = LeggedObsConfig(
+            exclude_current_positions_from_observation=exclude_current_positions_from_observation,
+            include_cfrc_ext_in_observation=include_cfrc_ext_in_observation,
+            contact_force_range=contact_force_range,
+        )
 
         self._max_target_range = max_target_range
         self._target_range = initial_target_range
@@ -72,109 +88,56 @@ class LeggedTargetEnv(MujocoEnv):
 
         self.target_site_id = None  # site ID for the target position
 
-        self._main_body = main_body
-
-        self._reset_noise_scale = reset_noise_scale
-
-        # clip range for rewards related to contact forces
-        self._contact_force_range = contact_force_range
-
-        self._exclude_current_positions_from_observation = (
-            exclude_current_positions_from_observation
-        )
-        self._include_cfrc_ext_in_observation = include_cfrc_ext_in_observation
-
         self.metadata = LeggedTargetEnv.metadata
 
-        MujocoEnv.__init__(
+        LeggedEnv.__init__(
             self,
             xml_file,
             frame_skip,
-            observation_space=None,  # needs to be defined after
             default_camera_config=default_camera_config,
+            init_cfg=init_cfg,
+            body_cfg=body_cfg,
+            obs_cfg=obs_cfg,
             **kwargs,
         )
 
-        # required for MujocoEnv
-        self.metadata = {
-            "render_modes": [
-                "human",
-                "rgb_array",
-                "depth_array",
-            ],
-            "render_fps": int(np.round(1.0 / self.dt)),
-        }
+        # load observation size from parent class
+        obs_size = self.observation_space.shape[0]
 
-        # for observations, we collect the model's qpos and qvel
-        obs_size = self.data.qpos.size + self.data.qvel.size
-
-        # we also add a relative target position vector (x,y)
+        # relative target position vector (x,y)
         obs_size += 2
 
-        # we may exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
-        obs_size -= 2 * exclude_current_positions_from_observation
+        # modify metadata for the final observation space
+        self.observation_structure["relative_target_pos"] = 2
 
-        # we may include the external forces acting on the robot
-        obs_size += len(self.cfrc_ext) * include_cfrc_ext_in_observation
-
-        # metadata for the final observation space
-        self.observation_structure = {
-            "qpos": self.data.qpos.size,
-            "qvel": self.data.qvel.size,
-            "relative_target_pos": 2,
-            "cfrc_ext": len(self.cfrc_ext) * include_cfrc_ext_in_observation,
-        }
-
+        # update the observation space
         self.observation_space = Box(
             low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64
         )
 
         self._prev_pos = (
-            self.data.body(self._main_body).xpos[:2].copy()
+            self.data.body(self.body_cfg.main_body).xpos[:2].copy()
         )  # previous position of the robot
-
-    @property
-    def cfrc_ext(self):
-        return self.data.cfrc_ext[1:]
-
-    @property
-    def termination_cost(self):
-        return (
-            self._terminate_when_unhealthy and (not self.is_healthy)
-        ) * self._termination_cost
-
-    def control_cost(self, action):
-        control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
-        return control_cost
-
-    @property
-    def contact_forces(self):
-        raw_contact_forces = self.cfrc_ext
-        min_value, max_value = self._contact_force_range
-        contact_forces = np.clip(raw_contact_forces, min_value, max_value)
-        return contact_forces
-
-    @property
-    def is_healthy(self):
-        state = self.state_vector()
-        min_z, max_z = self._healthy_z_range
-        is_healthy = np.isfinite(state).all() and min_z <= state[2] <= max_z
-        return is_healthy
 
     @property
     def goal_reached(self) -> bool:
         distance_to_target = np.linalg.norm(
-            self.target_pos - self.data.body(self._main_body).xpos[:2]
+            self.target_pos - self.data.body(self.body_cfg.main_body).xpos[:2]
         )
         return distance_to_target < 0.2
 
-    @property
-    def success_reward(self):
+    ## Rewards
+
+    def _reward_termination(self):
+        return (
+            self._terminate_when_unhealthy and (self.is_terminated)
+        ) * self._termination_cost
+
+    def _reward_success(self):
         return self.goal_reached * self._success_reward_weight
 
-    @property
-    def forward_reward(self):
-        current_pos = self.data.body(self._main_body).xpos[:2].copy()
+    def _reward_forward(self):
+        current_pos = self.data.body(self.body_cfg.main_body).xpos[:2].copy()
         displacement = current_pos - self._prev_pos
         target_direction = self.target_pos - current_pos
         target_direction /= np.linalg.norm(target_direction)
@@ -194,28 +157,31 @@ class LeggedTargetEnv(MujocoEnv):
         qpos = self.data.qpos.copy()
         qvel = self.data.qvel.copy()
 
-        relative_target_pos = self.target_pos - self.data.body(self._main_body).xpos[:2]
+        relative_target_pos = (
+            self.target_pos - self.data.body(self.body_cfg.main_body).xpos[:2]
+        )
 
         # exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
-        if self._exclude_current_positions_from_observation:
+        if self.obs_cfg.exclude_current_positions_from_observation:
             qpos = qpos[2:]
 
         obs = np.concatenate([qpos, qvel, relative_target_pos])
 
         # include the external forces acting on the robot
-        if self._include_cfrc_ext_in_observation:
+        if self.obs_cfg.include_cfrc_ext_in_observation:
             obs = np.concatenate([obs, self.cfrc_ext])
 
         return obs
 
-    def _get_rew(self, action):
-        forward_reward = self.forward_reward
-        success_reward = self.success_reward
+    def _get_rew(self, action: np.ndarray):
+        forward_reward = self._reward_forward()
+        success_reward = self._reward_success()
         rewards = forward_reward + success_reward
 
-        ctrl_cost = self.control_cost(action)
-        termination_cost = self.termination_cost
-        costs = ctrl_cost + termination_cost
+        ctrl_cost = self._reward_control(action)
+        action_rate_cost = self._reward_action_rate(self._prev_action, action)
+        termination_cost = self._reward_termination()
+        costs = ctrl_cost + termination_cost + action_rate_cost
 
         reward = rewards - costs
 
@@ -224,9 +190,11 @@ class LeggedTargetEnv(MujocoEnv):
             "reward_success": success_reward,
             "reward_ctrl": -ctrl_cost,
             "reward_termination": -termination_cost,
+            "reward_action_rate": -action_rate_cost,
         }
 
-        self._prev_pos = self.data.body(self._main_body).xpos[:2].copy()
+        self._prev_pos = self.data.body(self.body_cfg.main_body).xpos[:2].copy()
+        self._prev_action = action.copy()
 
         return reward, reward_info
 
@@ -244,7 +212,7 @@ class LeggedTargetEnv(MujocoEnv):
         reward, reward_info = self._get_rew(action)
 
         # termination condition 1. unhealthy
-        terminated = (not self.is_healthy) and self._terminate_when_unhealthy
+        terminated = (self.is_terminated) and self._terminate_when_unhealthy
         # termination condition 2. goal reached
         terminated = terminated or self.goal_reached
 
@@ -281,21 +249,9 @@ class LeggedTargetEnv(MujocoEnv):
         )  # Adjust Z as needed
 
     def reset_model(self):
-        noise_low = -self._reset_noise_scale
-        noise_high = self._reset_noise_scale
-
-        qpos = self.init_qpos + self.np_random.uniform(
-            low=noise_low, high=noise_high, size=self.model.nq
-        )
-        qvel = (
-            self.init_qvel
-            + self._reset_noise_scale * self.np_random.standard_normal(self.model.nv)
-        )
-
         if self._randomize_target_position:
             self.target_pos = self._generate_target_position()
 
-        self.set_state(qpos, qvel)
+        observation = super().reset_model()
 
-        observation = self._get_obs()
         return observation

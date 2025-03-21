@@ -217,6 +217,7 @@ class LeggedEnv(MujocoEnv):
 
         return reward, reward_info
 
+    # This is an example implementation, ideally all child environments should re-implement their own step function
     def step(self, action):
         self.do_simulation(action, self.frame_skip)
 
