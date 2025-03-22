@@ -139,7 +139,7 @@ class LeggedTargetEnv(LeggedEnv):
         distance_to_target = np.linalg.norm(
             self.target_pos - self.data.body(self.body_cfg.main_body).xpos[:2]
         )
-        return distance_to_target < 0.3
+        return distance_to_target < 0.5
 
     ## Rewards
 
