@@ -160,6 +160,12 @@ class LeggedEnv(MujocoEnv):
         )
 
     ### Rewards
+    def _reward_healthy(self) -> float:
+        """
+        Reward the robot for being healthy.
+        """
+        return not self.is_terminated
+
     def _reward_collision(self) -> float:
         """
         Penalize the robot for collisions.
