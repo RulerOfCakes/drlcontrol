@@ -714,20 +714,29 @@ env = gym.make(
     "LeggedTargetEnv",
     render_mode="human",
     frame_skip=5,
-    max_episode_steps=2000,  # physics steps will have been multiplied by 5, due to the frame_skip value
+    max_episode_steps=4000,  # physics steps will have been multiplied by 5, due to the frame_skip value
     xml_file=os.path.join(models_path, "ant_target.xml"),
+    forward_reward_weight=100,
+    ctrl_cost_weight=0,
+    termination_cost=100,
+    success_reward_weight=500,
+    angular_reward_weight=4.0,
+
+    initial_target_range=10.0,
+    initial_target_angular_range=np.pi,
 )
 
 myppo = PPO(
     env,
-    reward_scale=0.008,
-    lr=1.5e-4,
+    reward_scale=0.005,
+    lr=2e-4,
     ent_coef=5e-4,
     timestep_per_batch=2000,
-    actor_hidden_dim=512,
-    critic_hidden_dim=512,
+    actor_hidden_dim=1024,
+    critic_hidden_dim=1024,
     n_updates_per_iteration=10,
     save_freq=10,
+    lam=0.97
 )
 
 # myppo.load_model()
