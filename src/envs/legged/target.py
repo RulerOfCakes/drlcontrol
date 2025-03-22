@@ -191,7 +191,7 @@ class LeggedTargetEnv(LeggedEnv):
 
     # z coordinate is omitted as the robot is expected to move in the x-y plane
     def _generate_target_position(self):
-        r = self.np_random.uniform(low=2.0, high=self._target_range)
+        r = self.np_random.uniform(low=self._target_range, high=self._target_range)
         theta = self.np_random.uniform(
             low=-self._target_angular_range,
             high=self._target_angular_range,
