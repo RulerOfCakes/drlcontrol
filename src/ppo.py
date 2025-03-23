@@ -289,6 +289,10 @@ class PPO:
         print(
             f"{self.timesteps_per_batch} timesteps per batch for a total of {total_timesteps} timesteps"
         )
+
+        self.actor.train()
+        self.critic.train()
+
         t_so_far = 0  # Timesteps simulated so far
         i_so_far = 0  # Iterations ran so far
         while t_so_far < total_timesteps:  # ALG STEP 2
@@ -776,8 +780,8 @@ env = gym.make(
     xml_file=os.path.join(models_path, "ant_target.xml"),
     forward_reward_weight=100,
     ctrl_cost_weight=0,
-    termination_cost=100,
-    success_reward_weight=500,
+    termination_cost=500,
+    success_reward_weight=1000,
     angular_reward_weight=2.0,
 
     initial_target_range=10.0,
