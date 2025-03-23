@@ -9,6 +9,7 @@ from envs.legged.base import (
     LeggedInitConfig,
     LeggedObsConfig,
 )
+from utils.linalg import rotation_matrix
 
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
@@ -36,8 +37,8 @@ class LeggedTargetEnv(LeggedEnv):
         xml_file: str = "ant_target.xml",
         frame_skip: int = 5,  # each 'step' of the environment corresponds to 5 timesteps in the simulation
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
-        forward_reward_weight: float = 5.0,  # reward for getting closer to the target
-        angular_reward_weight: float = 2.0,  # reward for aligning the robot's forward direction with the target direction
+        forward_reward_weight: float = 10.0,  # reward for getting closer to the target
+        angular_reward_weight: float = 1.0,  # reward for aligning the robot's forward direction with the target direction
         success_reward_weight: float = 1000.0,  # reward for reaching the target
         termination_cost: float = 1000.0,  # penalty for terminating the episode early
         ctrl_cost_weight: float = 0.0001,  # penalize large/jerky actions
@@ -205,12 +206,16 @@ class LeggedTargetEnv(LeggedEnv):
         qpos = self.data.qpos.copy()
         qvel = self.data.qvel.copy()
 
-        body_rot = self.data.body(self.body_cfg.main_body).xmat.copy().reshape(3, 3)
+        body_rot: np.ndarray = (
+            self.data.body(self.body_cfg.main_body).xmat.copy().reshape(3, 3)
+        )
 
         # the linear velocities of the robot's body in qvel are in the global frame
         # we need to convert them to the local frame of the robot's body
         body_lin_vel = qvel[:3].copy()
-        body_lin_vel = body_rot @ body_lin_vel
+        body_lin_vel = (
+            body_rot.T @ body_lin_vel
+        )  # Transpose is required to convert from world frame to local frame
         qvel[:3] = body_lin_vel
 
         # compute the relative target position in the robot's local frame
@@ -220,14 +225,14 @@ class LeggedTargetEnv(LeggedEnv):
         relative_target_pos = np.append(
             relative_target_pos, 0.0
         )  # add a z coordinate for the rotation matrix
-        relative_target_pos = body_rot @ relative_target_pos
+        relative_target_pos = body_rot.T @ relative_target_pos
         relative_target_pos = relative_target_pos[:2]  # exclude the z coordinate
 
         body_vel = (
             self.data.body(self.body_cfg.main_body).xpos - self._prev_pos
         ) / self.dt
         # compute the relative direction of velocity in the same way
-        relative_vel: np.ndarray = body_rot @ body_vel
+        relative_vel: np.ndarray = body_rot.T @ body_vel
 
         # exclude the x and y coordinates of the torso(root link) for position agnostic behavior in policies.
         if self.obs_cfg.exclude_current_positions_from_observation:
@@ -307,10 +312,13 @@ class LeggedTargetEnv(LeggedEnv):
         return observation, reward, terminated, False, info
 
     def render(self, *args, **kwargs):
-        self._update_render_target()
-        super().render(*args, **kwargs)
-        self._render_info()
-        # self._render_forward_dir()
+        if self.mujoco_renderer.viewer is None:
+            super().render(*args, **kwargs)
+        else:
+            self._update_render_target()
+            # self._render_forward_dir()
+            self._render_info()
+            super().render(*args, **kwargs)
 
     def _update_render_target(self):
         if self.target_site_id is None:
@@ -328,9 +336,40 @@ class LeggedTargetEnv(LeggedEnv):
             [self.target_pos, [0.1]]
         )  # Adjust Z as needed
 
+    # INFO: A manual patch for self.mujoco_renderer.viewer.add_marker is required until the following PR is released:
+    # https://github.com/Farama-Foundation/Gymnasium/pull/1329
+    def _render_arrow(
+        self,
+        origin: np.ndarray,
+        dir: np.ndarray,
+        length: float = 1.0,
+        color: np.ndarray = np.array([0.0, 1.0, 0.0, 1.0]),
+    ):
+        # Create a 3D arrow using the provided origin, direction, and length
+        dir = (
+            dir / np.linalg.norm(dir) if np.linalg.norm(dir) > 0 else np.zeros_like(dir)
+        )
+
+        up_dir = np.array([0, 0, 1])  # default orientation of mujoco arrow
+
+        rotation = rotation_matrix(
+            np.cross(up_dir, dir),
+            np.arccos(np.dot(up_dir, dir)),
+        ).flatten()
+
+        # Add the arrow to the viewer
+        self.mujoco_renderer.viewer.add_marker(
+            type=mujoco.mjtGeom.mjGEOM_ARROW,
+            pos=origin,
+            mat=rotation,
+            size=np.array([0.05, 0.05, length]),
+            rgba=color,
+        )
+
     def _render_forward_dir(self):
         # Render the target position in the forward direction of the robot
         body_rotation = self.data.body(self.body_cfg.main_body).xmat.reshape(3, 3)
+        # forward_direction = body_rotation @ np.array([1, 0, 0])  # Assuming forward is along the x-axis
         forward_direction = body_rotation[:, 0]
         forward_direction = (
             forward_direction / np.linalg.norm(forward_direction)
@@ -338,14 +377,11 @@ class LeggedTargetEnv(LeggedEnv):
             else np.zeros_like(forward_direction)
         )
 
-        # TODO: wait for gymnasium fix to be released: https://github.com/Farama-Foundation/Gymnasium/pull/1329
-        # self.mujoco_renderer.viewer.add_marker(
-        #     type=mujoco.mjtGeom.mjGEOM_ARROW,
-        #     objtype=mujoco.mjtObj.mjOBJ_SITE,
-        #     pos=self.target_pos,
-        #     size=[1,1,1],
-        #     rgba=[1, 0, 0, 1],  # Red color
-        # )
+        self._render_arrow(
+            origin=self.data.body(self.body_cfg.main_body).xpos.copy(),
+            dir=forward_direction,
+            length=1.0,
+        )
 
     def _render_info(self):
         if self.render_mode != "human":

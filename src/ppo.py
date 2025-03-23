@@ -7,6 +7,7 @@ NOTE: All "ALG STEP"s are following the numbers from the original PPO pseudocode
 import time
 import gymnasium as gym
 
+import mujoco
 import numpy as np
 import math
 
@@ -210,19 +211,66 @@ class PPO:
         if self.show_graph:
             self.multi_plot = MultiRealTimePlot()
 
-            self.multi_plot.add_plot('avg_ep_lens', xlabel='Iteration', ylabel='Average Episodic Length', title='Average Episodic Length')
-            self.multi_plot.add_plot('avg_ep_rews', xlabel='Iteration', ylabel='Average Episodic Return', title='Average Episodic Return')
-            self.multi_plot.add_plot('avg_batch_return', xlabel='Iteration', ylabel='Average Batch Return (By GAE)', title='Average Batch Return (By GAE)')
-            self.multi_plot.add_plot('est_batch_return', xlabel='Iteration', ylabel='Estimated Batch Return (By Critic Network)', title='Estimated Batch Return (By Critic Network)')
-            self.multi_plot.add_plot('explained_variance', xlabel='Iteration', ylabel='Explained Variance', title='Explained Variance')
-            self.multi_plot.add_plot('avg_actor_loss', xlabel='Iteration', ylabel='Average Actor Loss', title='Average Actor Loss')
-            self.multi_plot.add_plot('avg_critic_loss', xlabel='Iteration', ylabel='Average Critic Loss', title='Average Critic Loss')
-            self.multi_plot.add_plot('avg_entropy_loss', xlabel='Iteration', ylabel='Average Entropy Loss', title='Average Entropy Loss')
-            self.multi_plot.add_plot('avg_approx_kl', xlabel='Iteration', ylabel='KL Divergence Approximation', title='KL Divergence Approximation')
-            self.multi_plot.add_plot('delta_t', xlabel='Iteration', ylabel='Time Taken', title='Time Taken')
+            self.multi_plot.add_plot(
+                "avg_ep_lens",
+                xlabel="Iteration",
+                ylabel="Average Episodic Length",
+                title="Average Episodic Length",
+            )
+            self.multi_plot.add_plot(
+                "avg_ep_rews",
+                xlabel="Iteration",
+                ylabel="Average Episodic Return",
+                title="Average Episodic Return",
+            )
+            self.multi_plot.add_plot(
+                "avg_batch_return",
+                xlabel="Iteration",
+                ylabel="Average Batch Return (By GAE)",
+                title="Average Batch Return (By GAE)",
+            )
+            self.multi_plot.add_plot(
+                "est_batch_return",
+                xlabel="Iteration",
+                ylabel="Estimated Batch Return (By Critic Network)",
+                title="Estimated Batch Return (By Critic Network)",
+            )
+            self.multi_plot.add_plot(
+                "explained_variance",
+                xlabel="Iteration",
+                ylabel="Explained Variance",
+                title="Explained Variance",
+            )
+            self.multi_plot.add_plot(
+                "avg_actor_loss",
+                xlabel="Iteration",
+                ylabel="Average Actor Loss",
+                title="Average Actor Loss",
+            )
+            self.multi_plot.add_plot(
+                "avg_critic_loss",
+                xlabel="Iteration",
+                ylabel="Average Critic Loss",
+                title="Average Critic Loss",
+            )
+            self.multi_plot.add_plot(
+                "avg_entropy_loss",
+                xlabel="Iteration",
+                ylabel="Average Entropy Loss",
+                title="Average Entropy Loss",
+            )
+            self.multi_plot.add_plot(
+                "avg_approx_kl",
+                xlabel="Iteration",
+                ylabel="KL Divergence Approximation",
+                title="KL Divergence Approximation",
+            )
+            self.multi_plot.add_plot(
+                "delta_t", xlabel="Iteration", ylabel="Time Taken", title="Time Taken"
+            )
 
             for i, key in enumerate(info):
-                self.multi_plot.add_plot(key, xlabel='Iteration', ylabel=key, title=key)
+                self.multi_plot.add_plot(key, xlabel="Iteration", ylabel=key, title=key)
 
     def learn(self, total_timesteps):
         """
@@ -616,24 +664,34 @@ class PPO:
             [divergence.float().mean() for divergence in self.logger["approx_kl"]]
         )
 
-
         # log to graph before converting values to string
 
         if self.show_graph:
-            self.multi_plot.add_value('avg_ep_lens', i_so_far, avg_ep_lens.item())
-            self.multi_plot.add_value('avg_ep_rews', i_so_far, avg_ep_rews.item())
-            self.multi_plot.add_value('avg_batch_return', i_so_far, self.logger['avg_batch_return'])
-            self.multi_plot.add_value('est_batch_return', i_so_far, self.logger['avg_batch_est'])
-            self.multi_plot.add_value('explained_variance', i_so_far, self.logger['explained_variance'])
-            self.multi_plot.add_value('avg_actor_loss', i_so_far, avg_actor_loss.item())
-            self.multi_plot.add_value('avg_critic_loss', i_so_far, avg_critic_loss.item())
-            self.multi_plot.add_value('avg_entropy_loss', i_so_far, avg_entropy_loss.item())
-            self.multi_plot.add_value('avg_approx_kl', i_so_far, avg_approx_kl.item())
-            self.multi_plot.add_value('delta_t', i_so_far, delta_t)
+            self.multi_plot.add_value("avg_ep_lens", i_so_far, avg_ep_lens.item())
+            self.multi_plot.add_value("avg_ep_rews", i_so_far, avg_ep_rews.item())
+            self.multi_plot.add_value(
+                "avg_batch_return", i_so_far, self.logger["avg_batch_return"]
+            )
+            self.multi_plot.add_value(
+                "est_batch_return", i_so_far, self.logger["avg_batch_est"]
+            )
+            self.multi_plot.add_value(
+                "explained_variance", i_so_far, self.logger["explained_variance"]
+            )
+            self.multi_plot.add_value("avg_actor_loss", i_so_far, avg_actor_loss.item())
+            self.multi_plot.add_value(
+                "avg_critic_loss", i_so_far, avg_critic_loss.item()
+            )
+            self.multi_plot.add_value(
+                "avg_entropy_loss", i_so_far, avg_entropy_loss.item()
+            )
+            self.multi_plot.add_value("avg_approx_kl", i_so_far, avg_approx_kl.item())
+            self.multi_plot.add_value("delta_t", i_so_far, delta_t)
 
             for i, key in enumerate(self.iter_info):
-                self.multi_plot.add_value(key, i_so_far, np.mean(self.iter_info[key]).item())
-
+                self.multi_plot.add_value(
+                    key, i_so_far, np.mean(self.iter_info[key]).item()
+                )
 
         # Round decimal places for more aesthetic logging messages
         avg_ep_lens = f"{avg_ep_lens:.2f}"
@@ -678,7 +736,7 @@ class PPO:
         self.logger["critic_losses"] = []
         self.logger["entropy_losses"] = []
         self.logger["approx_kl"] = []
-        
+
         for i, key in enumerate(self.iter_info):
             self.iter_info[key] = []
 
@@ -712,7 +770,7 @@ models_path = os.path.join(parent_path, "models")
 
 env = gym.make(
     "LeggedTargetEnv",
-    render_mode="human",
+    # render_mode="human",
     frame_skip=5,
     max_episode_steps=4000,  # physics steps will have been multiplied by 5, due to the frame_skip value
     xml_file=os.path.join(models_path, "ant_target.xml"),
