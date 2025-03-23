@@ -745,10 +745,17 @@ class PPO:
             self.iter_info[key] = []
 
     def save_model(self):
-        torch.save(self.actor.state_dict(), "./ppo_actor.pth")
-        torch.save(self.critic.state_dict(), "./ppo_critic.pth")
+        torch.save({'actor': self.actor.state_dict(), 'actor_optim': self.actor_optim.state_dict(),
+                    'critic': self.critic.state_dict(), 'ciritc_optim': self.critic_optim.state_dict()}, './ppo.pth')
 
     def load_model(self):
+        checkpoint = torch.load('./ppo.pth')
+        self.actor.load_state_dict(checkpoint['actor'])
+        self.actor_optim.load_state_dict(checkpoint['actor_optim'])
+        self.critic.load_state_dict(checkpoint['critic'])
+        self.critic_optim.load_state_dict(checkpoint['ciritc_optim'])
+
+    def load_model_old(self):
         self.actor.load_state_dict(torch.load("./ppo_actor.pth", weights_only=True))
         self.critic.load_state_dict(torch.load("./ppo_critic.pth", weights_only=True))
 
@@ -791,8 +798,8 @@ env = gym.make(
 myppo = PPO(
     env,
     reward_scale=0.006,
-    lr=2e-4,
-    ent_coef=5e-4,
+    lr=1e-4,
+    ent_coef=2e-4,
     timestep_per_batch=6000,
     actor_hidden_dim=1024,
     critic_hidden_dim=1024,
