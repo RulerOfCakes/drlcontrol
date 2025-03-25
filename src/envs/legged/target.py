@@ -18,7 +18,7 @@ DEFAULT_CAMERA_CONFIG = {
 
 class LeggedTargetEnv(LeggedEnv):
     """
-    Can use any legged robot model, with the forward direction assumed to be +x.
+    Can use any legged robot model.
 
     The goal of this environment is to achieve stable locomotion towards a given target position.
     A site by the name of "target_site" must be defined as a direct descendent of <worldbody/> in the given mjcf file.
@@ -175,8 +175,12 @@ class LeggedTargetEnv(LeggedEnv):
             else np.zeros_like(target_direction)
         )
 
+        dot = np.dot(forward_direction, target_direction)
+        sign = np.sign(dot)
+
         return (
-            np.square(np.dot(forward_direction, target_direction))
+            np.square(dot)
+            * sign  # reward for aligning with the target direction
             * self._angular_reward_weight
         )
 
@@ -316,7 +320,7 @@ class LeggedTargetEnv(LeggedEnv):
             super().render(*args, **kwargs)
         else:
             self._update_render_target()
-            # self._render_forward_dir()
+            self._render_forward_dir()
             self._render_info()
             super().render(*args, **kwargs)
 

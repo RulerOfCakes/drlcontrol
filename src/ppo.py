@@ -745,15 +745,22 @@ class PPO:
             self.iter_info[key] = []
 
     def save_model(self):
-        torch.save({'actor': self.actor.state_dict(), 'actor_optim': self.actor_optim.state_dict(),
-                    'critic': self.critic.state_dict(), 'ciritc_optim': self.critic_optim.state_dict()}, './ppo.pth')
+        torch.save(
+            {
+                "actor": self.actor.state_dict(),
+                "actor_optim": self.actor_optim.state_dict(),
+                "critic": self.critic.state_dict(),
+                "ciritc_optim": self.critic_optim.state_dict(),
+            },
+            "./ppo.pth",
+        )
 
     def load_model(self):
-        checkpoint = torch.load('./ppo.pth')
-        self.actor.load_state_dict(checkpoint['actor'])
-        self.actor_optim.load_state_dict(checkpoint['actor_optim'])
-        self.critic.load_state_dict(checkpoint['critic'])
-        self.critic_optim.load_state_dict(checkpoint['ciritc_optim'])
+        checkpoint = torch.load("./ppo.pth")
+        self.actor.load_state_dict(checkpoint["actor"])
+        self.actor_optim.load_state_dict(checkpoint["actor_optim"])
+        self.critic.load_state_dict(checkpoint["critic"])
+        self.critic_optim.load_state_dict(checkpoint["ciritc_optim"])
 
     def load_model_old(self):
         self.actor.load_state_dict(torch.load("./ppo_actor.pth", weights_only=True))
@@ -784,14 +791,14 @@ env = gym.make(
     render_mode="human",
     frame_skip=5,
     max_episode_steps=4000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-    xml_file=os.path.join(models_path, "ant_target.xml"),
+    xml_file=os.path.join(models_path, "anybotics_anymal_b/target.xml"),
+    termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
     forward_reward_weight=100,
     ctrl_cost_weight=0,
-    termination_cost=500,
+    termination_cost=1000,
     success_reward_weight=1000,
     angular_reward_weight=2.0,
-
-    initial_target_range=10.0,
+    # initial_target_range=10.0,
     initial_target_angular_range=np.pi,
 )
 
@@ -805,8 +812,8 @@ myppo = PPO(
     critic_hidden_dim=1024,
     n_updates_per_iteration=10,
     save_freq=10,
-    lam=0.97
+    lam=0.97,
 )
 
-myppo.load_model()
+# myppo.load_model()
 myppo.learn(10000000000)

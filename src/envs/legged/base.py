@@ -85,7 +85,7 @@ class LeggedEnv(MujocoEnv):
         # body indices for fast access
         self._termination_contact_indices = [
             (
-                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY)
+                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
                 if isinstance(name, str)
                 else name
             )
@@ -93,7 +93,7 @@ class LeggedEnv(MujocoEnv):
         ]
         self._penalized_contact_indices = [
             (
-                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY)
+                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
                 if isinstance(name, str)
                 else name
             )
