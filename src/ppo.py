@@ -787,11 +787,11 @@ models_path = os.path.join(parent_path, "models")
 # )
 
 env = gym.make(
-    "LeggedTargetEnv",
+    "LeggedTerrainEnv",
     render_mode="human",
     frame_skip=5,
     max_episode_steps=4000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-    xml_file=os.path.join(models_path, "anybotics_anymal_b/target.xml"),
+    xml_file=os.path.join(models_path, "anybotics_anymal_b/scene_terrain.xml"),
     termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
     forward_reward_weight=100,
     ctrl_cost_weight=0,
