@@ -16,6 +16,7 @@ DEFAULT_CAMERA_CONFIG = {
 }
 
 
+# TODO: randomize start position too?
 class LeggedTerrainEnv(LeggedEnv):
     """
     Can use any legged robot model.
@@ -547,7 +548,24 @@ class LeggedTerrainEnv(LeggedEnv):
         if self._randomize_target_position:
             self.target_pos = self._generate_target_position()
 
-        # TODO: reset model override
-        observation = super().reset_model()
+        noise_low = -self.init_cfg.reset_noise_scale
+        noise_high = self.init_cfg.reset_noise_scale
+
+        qpos = self.init_qpos + self.np_random.uniform(
+            low=noise_low, high=noise_high, size=self.model.nq
+        )
+        qvel = (
+            self.init_qvel
+            + self.init_cfg.reset_noise_scale
+            * self.np_random.standard_normal(self.model.nv)
+        )
+
+        # Ensure that the starting position is above the ground
+        ground_height = self._get_ground_height(qpos[0], qpos[1])
+        qpos[2] = max(qpos[2], ground_height + 1.1)
+
+        self.set_state(qpos, qvel)
+
+        observation = self._get_obs()
 
         return observation
