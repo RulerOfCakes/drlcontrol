@@ -53,6 +53,7 @@ class LeggedTerrainEnv(LeggedEnv):
         include_cfrc_ext_in_observation: bool = True,
         terrain_profile_radius: float = 2.0,  # radius of the terrain profile around the robot
         terrain_profile_resolution: int = 5,  # resolution of the terrain profile
+        spawn_radius: float = 5.0,  # radius of the spawn area for the robot
         randomize_target_position: bool = True,
         initial_target_range: float = 4.0,
         initial_target_angular_range: float = 0.0,
@@ -97,8 +98,9 @@ class LeggedTerrainEnv(LeggedEnv):
         self._increment_frequency = increment_frequency
         self._steps = 0
 
+        self._spawn_radius = spawn_radius
+
         self._randomize_target_position = randomize_target_position
-        self.target_pos = self._generate_target_position()
 
         self.target_site_id = None  # site ID for the target position
 
@@ -116,6 +118,9 @@ class LeggedTerrainEnv(LeggedEnv):
             obs_cfg=obs_cfg,
             **kwargs,
         )
+        
+        self.target_pos = self._generate_target_position(self.data.qpos[0], self.data.qpos[1])
+        
 
         # load observation size from parent class
         obs_size = self.observation_space.shape[0]
@@ -197,7 +202,7 @@ class LeggedTerrainEnv(LeggedEnv):
         return displacement_on_target_direction
 
     def _get_ground_height(self, x: float, y: float) -> float:
-        INF_HEIGHT = 1000.0
+        INF_HEIGHT = 100.0
         ray_start = np.array([x, y, INF_HEIGHT], dtype=np.float64).reshape(3, 1)
         ray_dir = np.array([0, 0, -1], dtype=np.float64).reshape(3, 1)
         intersection_geoms = np.zeros((1, 1), dtype=np.int32)
@@ -263,7 +268,7 @@ class LeggedTerrainEnv(LeggedEnv):
         return terrain_profile_array
 
     # z coordinate is omitted as the robot is expected to move in the x-y plane
-    def _generate_target_position(self):
+    def _generate_target_position(self, center_x: float, center_y: float):
         r = self.np_random.uniform(low=self._target_range, high=self._target_range)
         theta = self.np_random.uniform(
             low=-self._target_angular_range,
@@ -271,7 +276,7 @@ class LeggedTerrainEnv(LeggedEnv):
         )
         x = r * np.cos(theta)
         y = r * np.sin(theta)
-        return np.array([x, y], dtype=np.float32)
+        return np.array([x + center_x, y + center_y], dtype=np.float32)
 
     def _get_obs(self):
         # get the current state of the robot
@@ -545,9 +550,6 @@ class LeggedTerrainEnv(LeggedEnv):
         )
 
     def reset_model(self):
-        if self._randomize_target_position:
-            self.target_pos = self._generate_target_position()
-
         noise_low = -self.init_cfg.reset_noise_scale
         noise_high = self.init_cfg.reset_noise_scale
 
@@ -560,9 +562,23 @@ class LeggedTerrainEnv(LeggedEnv):
             * self.np_random.standard_normal(self.model.nv)
         )
 
+        # random spawn position
+        radius = np.random.uniform(0, self._spawn_radius)
+        theta = np.random.uniform(0, 2 * np.pi)
+
+        spawn_x = radius * np.cos(theta)
+        spawn_y = radius * np.sin(theta)
+
+        qpos[0] = spawn_x
+        qpos[1] = spawn_y
+
         # Ensure that the starting position is above the ground
-        ground_height = self._get_ground_height(qpos[0], qpos[1])
-        qpos[2] = max(qpos[2], ground_height + 1.1)
+        # TODO: extract information from the heightfield
+        ground_height = 1.3
+        qpos[2] = max(qpos[2], ground_height )
+        
+        if self._randomize_target_position:
+            self.target_pos = self._generate_target_position(spawn_x,spawn_y)
 
         self.set_state(qpos, qvel)
 
