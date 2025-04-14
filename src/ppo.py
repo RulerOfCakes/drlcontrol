@@ -787,7 +787,7 @@ models_path = os.path.join(parent_path, "models")
 # )
 
 env = gym.make(
-    "LeggedTargetEnv",
+    "LeggedTerrainEnv",
     render_mode="human",
     frame_skip=5,
     max_episode_steps=20000,  # physics steps will have been multiplied by 5, due to the frame_skip value

@@ -3,7 +3,7 @@ from envs.viperx import ViperXEnv
 from envs.spot import *
 from envs.cassie import CassieEnv
 from envs.go2 import *
-from envs.legged import LeggedForwardEnv, LeggedTargetEnv
+from envs.legged import LeggedForwardEnv, LeggedTargetEnv, LeggedTerrainEnv
 
 from gymnasium.envs.registration import register
 
@@ -68,6 +68,13 @@ register(
 register(
     id="LeggedTargetEnv",
     entry_point="envs:LeggedTargetEnv",
+    max_episode_steps=1000,
+    reward_threshold=6000.0,
+)
+
+register(
+    id="LeggedTerrainEnv",
+    entry_point="envs:LeggedTerrainEnv",
     max_episode_steps=1000,
     reward_threshold=6000.0,
 )
