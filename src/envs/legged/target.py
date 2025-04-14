@@ -42,6 +42,7 @@ class LeggedTargetEnv(LeggedEnv):
         success_reward_weight: float = 1000.0,  # reward for reaching the target
         termination_cost: float = 1000.0,  # penalty for terminating the episode early
         ctrl_cost_weight: float = 0.0001,  # penalize large/jerky actions
+        lin_vel_z_weight: float = 0.01,  # penalize z velocity
         action_rate_cost_weight: float = 0.0001,  # penalize large/jerky actions
         main_body: Union[int, str] = 1,
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
@@ -50,6 +51,9 @@ class LeggedTargetEnv(LeggedEnv):
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
         exclude_current_positions_from_observation: bool = True,
         include_cfrc_ext_in_observation: bool = False,
+        include_cvel_in_observation: bool = False,
+        include_qfrc_actuator_in_observation: bool = False,
+        include_cinert_in_observation: bool = False,
         randomize_target_position: bool = True,
         initial_target_range: float = 4.0,
         initial_target_angular_range: float = 0.0,
@@ -63,6 +67,7 @@ class LeggedTargetEnv(LeggedEnv):
         # initialize the reward variables
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
+        self._lin_vel_z_weight = lin_vel_z_weight
         self._success_reward_weight = success_reward_weight
         self._angular_reward_weight = angular_reward_weight
         self._termination_cost = termination_cost
@@ -82,6 +87,9 @@ class LeggedTargetEnv(LeggedEnv):
         obs_cfg = LeggedObsConfig(
             exclude_current_positions_from_observation=exclude_current_positions_from_observation,
             include_cfrc_ext_in_observation=include_cfrc_ext_in_observation,
+            include_qfrc_actuator_in_observation=include_qfrc_actuator_in_observation,
+            include_cvel_in_observation=include_cvel_in_observation,
+            include_cinert_in_observation=include_cinert_in_observation,
             contact_force_range=contact_force_range,
         )
 
@@ -248,6 +256,15 @@ class LeggedTargetEnv(LeggedEnv):
         if self.obs_cfg.include_cfrc_ext_in_observation:
             obs = np.concatenate([obs, self.contact_forces])
 
+        if self.obs_cfg.include_cinert_in_observation:
+            obs = np.concatenate([obs, self.cinert])
+
+        if self.obs_cfg.include_cvel_in_observation:
+            obs = np.concatenate([obs, self.cvel])
+
+        if self.obs_cfg.include_qfrc_actuator_in_observation:
+            obs = np.concatenate([obs, self.actuator_forces])
+
         return obs
 
     def _get_rew(self, action: np.ndarray):
@@ -257,11 +274,14 @@ class LeggedTargetEnv(LeggedEnv):
         rewards = forward_reward + success_reward + angular_reward
 
         ctrl_cost = self._ctrl_cost_weight * self._reward_control(action)
+        lin_vel_z_cost = self._lin_vel_z_weight * self._reward_lin_vel_z(
+            self._prev_pos, self.data.body(self.body_cfg.main_body).xpos.copy()
+        )
         action_rate_cost = self._action_rate_cost_weight * self._reward_action_rate(
             self._prev_action, action
         )
         termination_cost = self._reward_termination()
-        costs = ctrl_cost + termination_cost + action_rate_cost
+        costs = ctrl_cost + termination_cost + action_rate_cost + lin_vel_z_cost
 
         reward = rewards - costs
 
@@ -270,6 +290,7 @@ class LeggedTargetEnv(LeggedEnv):
             "reward_angular": angular_reward,
             "reward_success": success_reward,
             "reward_ctrl": -ctrl_cost,
+            "reward_lin_vel_z": -lin_vel_z_cost,
             "reward_termination": -termination_cost,
             "reward_action_rate": -action_rate_cost,
         }
