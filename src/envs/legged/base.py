@@ -139,6 +139,27 @@ class LeggedEnv(MujocoEnv):
         self._prev_action = np.zeros(self.action_space.shape[0], dtype=np.float64)
 
     @property
+    def cvel(self):
+        """
+        Returns the center-of-mass based linear and angular velocities of the robot.
+        """
+        return self.data.cvel.flat.copy()
+
+    @property
+    def cinertia(self):
+        """
+        Returns the inertia of the robot.
+        """
+        return self.data.cinert.flat.copy()
+
+    @property
+    def actuator_forces(self):
+        """
+        Returns a 1D array of actuator forces acting on the robot.
+        """
+        return self.data.qfrc_actuator.flat.copy()
+
+    @property
     def contact_forces(self):
         """
         Returns a 2D array of contact forces acting on the robot,
@@ -190,6 +211,13 @@ class LeggedEnv(MujocoEnv):
         """
         action_rate_cost: float = np.sum(np.square(action - prev_action))
         return action_rate_cost
+
+    def _reward_lin_vel_z(self, prev_pos: np.ndarray, pos: np.ndarray) -> float:
+        """
+        Penalize the robot for z axis linear velocity.
+        """
+        z_vel: float = (pos[2] - prev_pos[2]) / self.dt
+        return np.square(z_vel)
 
     def _get_obs(self):
         # get the current state of the robot
