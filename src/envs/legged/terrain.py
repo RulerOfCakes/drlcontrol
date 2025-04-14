@@ -16,7 +16,6 @@ DEFAULT_CAMERA_CONFIG = {
 }
 
 
-# TODO: randomize start position too?
 class LeggedTerrainEnv(LeggedEnv):
     """
     Can use any legged robot model.
@@ -118,9 +117,10 @@ class LeggedTerrainEnv(LeggedEnv):
             obs_cfg=obs_cfg,
             **kwargs,
         )
-        
-        self.target_pos = self._generate_target_position(self.data.qpos[0], self.data.qpos[1])
-        
+
+        self.target_pos = self._generate_target_position(
+            self.data.qpos[0], self.data.qpos[1]
+        )
 
         # load observation size from parent class
         obs_size = self.observation_space.shape[0]
@@ -396,7 +396,7 @@ class LeggedTerrainEnv(LeggedEnv):
             super().render(*args, **kwargs)
         else:
             self._update_render_target()
-            self._render_forward_dir()
+            # self._render_forward_dir()
             self._render_info()
             super().render(*args, **kwargs)
 
@@ -575,10 +575,10 @@ class LeggedTerrainEnv(LeggedEnv):
         # Ensure that the starting position is above the ground
         # TODO: extract information from the heightfield
         ground_height = 1.3
-        qpos[2] = max(qpos[2], ground_height )
-        
+        qpos[2] = max(qpos[2], ground_height)
+
         if self._randomize_target_position:
-            self.target_pos = self._generate_target_position(spawn_x,spawn_y)
+            self.target_pos = self._generate_target_position(spawn_x, spawn_y)
 
         self.set_state(qpos, qvel)
 
