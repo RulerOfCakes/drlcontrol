@@ -36,6 +36,13 @@ class LeggedObsConfig:
     include_cfrc_ext_in_observation: bool = (
         False  # include external forces in the observation
     )
+    include_cvel_in_observation: bool = (
+        False  # include center of mass velocity in the observation
+    )
+    include_cinert_in_observation: bool = False  # include inertia in the observation
+    include_qfrc_actuator_in_observation: bool = (
+        False  # include actuator forces in the observation
+    )
     contact_force_range: tuple[float, float] = (
         -np.inf,
         np.inf,
@@ -121,6 +128,12 @@ class LeggedEnv(MujocoEnv):
             len(self.data.cfrc_ext.ravel())
             * self.obs_cfg.include_cfrc_ext_in_observation
         )
+        obs_size += len(self.cvel) * self.obs_cfg.include_cvel_in_observation
+        obs_size += (
+            len(self.actuator_forces)
+            * self.obs_cfg.include_qfrc_actuator_in_observation
+        )
+        obs_size += len(self.cinert) * self.obs_cfg.include_cinert_in_observation
 
         # metadata for the final observation space
         # both observation_structure and observation_space must be correctly adjusted by child classes
@@ -130,6 +143,10 @@ class LeggedEnv(MujocoEnv):
             "qvel": self.data.qvel.size,
             "cfrc_ext": len(self.data.cfrc_ext.ravel())
             * self.obs_cfg.include_cfrc_ext_in_observation,
+            "cvel": len(self.cvel) * self.obs_cfg.include_cvel_in_observation,
+            "actuator_forces": len(self.actuator_forces)
+            * self.obs_cfg.include_qfrc_actuator_in_observation,
+            "cinert": len(self.cinert) * self.obs_cfg.include_cinert_in_observation,
         }
 
         self.observation_space = Box(
@@ -146,7 +163,7 @@ class LeggedEnv(MujocoEnv):
         return self.data.cvel.flat.copy()
 
     @property
-    def cinertia(self):
+    def cinert(self):
         """
         Returns the inertia of the robot.
         """
@@ -230,9 +247,17 @@ class LeggedEnv(MujocoEnv):
 
         obs = np.concatenate([qpos, qvel])
 
-        # include the external forces acting on the robot
         if self.obs_cfg.include_cfrc_ext_in_observation:
             obs = np.concatenate([obs, self.data.cfrc_ext])
+
+        if self.obs_cfg.include_cinert_in_observation:
+            obs = np.concatenate([obs, self.cinert])
+
+        if self.obs_cfg.include_qfrc_actuator_in_observation:
+            obs = np.concatenate([obs, self.actuator_forces])
+
+        if self.obs_cfg.include_cvel_in_observation:
+            obs = np.concatenate([obs, self.cvel])
 
         return obs
 
