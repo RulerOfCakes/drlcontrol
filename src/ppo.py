@@ -766,41 +766,19 @@ class PPO:
         self.actor.load_state_dict(torch.load("./ppo_actor.pth", weights_only=True))
         self.critic.load_state_dict(torch.load("./ppo_critic.pth", weights_only=True))
 
-
-# env = gym.make("Pendulum-v1")
-# env = gym.make('Ant-v5')
-# env = gym.make("Hopper-v5")
-# env = gym.make("LunarLander-v3", continuous=True)
-
 current_path = os.path.dirname(__file__)
 parent_path = os.path.dirname(current_path)
 models_path = os.path.join(parent_path, "models")
 
-# env = gym.make(
-#     "ViperX-v0",
-#     render_mode="human",
-#     frame_skip=5,
-#     max_episode_steps=1000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-#     xml_file=os.path.join(models_path, "trossen_vx300s/scene_box.xml"),
-#     collision_penalty_weight = 0.0,
-#     success_reward = 2000,
-# )
-
 env = gym.make(
-    "LeggedTerrainEnv",
+    "LeggedForwardEnv",
     render_mode="human",
     frame_skip=5,
     max_episode_steps=20000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-    xml_file=os.path.join(models_path, "anybotics_anymal_b/target.xml"),
-    termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
+    xml_file=os.path.join(models_path, "boston_dynamics_spot/scene_gap.xml"),
+    # termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
     forward_reward_weight=700,
-    ctrl_cost_weight=0,
     termination_cost=2000,
-    success_reward_weight=3000,
-    angular_reward_weight=2.5,
-    initial_target_range=5.0,
-    max_target_range=5.0,
-    initial_target_angular_range=np.pi,
 )
 
 myppo = PPO(
@@ -816,5 +794,5 @@ myppo = PPO(
     lam=0.98,
 )
 
-myppo.load_model()
+# myppo.load_model()
 myppo.learn(10000000000)

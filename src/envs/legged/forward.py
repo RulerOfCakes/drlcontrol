@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Union
+from typing import Dict, List, Tuple, Union
 from gymnasium.spaces import Box
 import mujoco
 import numpy as np
@@ -38,6 +38,10 @@ class LeggedForwardEnv(LeggedEnv):
         healthy_reward: float = 1.0,  # reward for staying alive
         forward_reward_weight: float = 1.0,  # reward for forward locomotion
         main_body: Union[int, str] = 1,
+        termination_contacts: List[Union[int, str]] = [
+            1
+        ],  # contacts that will terminate the episode
+        termination_height_range: Tuple[float, float] = (-np.inf, np.inf),  # height range for termination
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
         termination_cost: float = 1000.0,  # penalty for terminating the episode early
         ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
@@ -83,7 +87,8 @@ class LeggedForwardEnv(LeggedEnv):
         )
         body_cfg = LeggedBodyConfig(
             main_body=main_body,
-            termination_contacts=[main_body],
+            termination_contacts=termination_contacts,
+            termination_height_range=termination_height_range,
             penalized_contacts=[],
         )
         obs_cfg = LeggedObsConfig(

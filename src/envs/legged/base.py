@@ -23,6 +23,7 @@ class LeggedBodyConfig:
     termination_contacts: List[Union[int, str]] = field(
         default_factory=list
     )  # body contacts that terminate the episode
+    termination_height_range: tuple[float, float] = (-np.inf, np.inf)
     penalized_contacts: List[Union[int, str]] = field(
         default_factory=list
     )  # body contacts that are penalized in the reward function
@@ -190,11 +191,15 @@ class LeggedEnv(MujocoEnv):
     @property
     def is_terminated(self) -> bool:
         """
-        Check if the episode is terminated based on the contacts with the ground.
+        Check if the episode is terminated based on termination conditions.
         """
         # Check for contacts with the ground
+        robot_height = self.data.body(self.body_cfg.main_body).xpos[2]
         return np.any(
             np.abs(self.contact_forces[self._termination_contact_indices].flatten()) > 0
+        ) or (
+            robot_height < self.body_cfg.termination_height_range[0]
+            or robot_height > self.body_cfg.termination_height_range[1]
         )
 
     ### Rewards

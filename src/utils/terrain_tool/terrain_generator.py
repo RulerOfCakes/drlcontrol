@@ -4,10 +4,10 @@ import cv2
 import noise
 
 # Change these parameters!
-ROBOT = "anybotics_anymal_b"
+ROBOT = "boston_dynamics_spot"
 ROBOT_DIR = "../../../models/" + ROBOT
-INPUT_SCENE_PATH = ROBOT_DIR + "/target.xml"
-OUTPUT_SCENE_PATH = ROBOT_DIR + "/scene_terrain.xml"
+INPUT_SCENE_PATH = ROBOT_DIR + "/scene.xml"
+OUTPUT_SCENE_PATH = ROBOT_DIR + "/scene_gap.xml"
 
 
 # zyx euler angle to quaternion
@@ -310,12 +310,12 @@ if __name__ == "__main__":
     #                   nums=[10, 8])
 
     # Perlin heigh field
-    tg.AddPerlinHeighField(
-        position=[0.0, 0.0, -0.5],
-        size=[50.0, 50.0],
-        height_scale=2,
-        negative_height=0.8,
-    )
+    # tg.AddPerlinHeighField(
+    #     position=[0.0, 0.0, -0.5],
+    #     size=[50.0, 50.0],
+    #     height_scale=2,
+    #     negative_height=0.8,
+    # )
 
     # Heigh field from image
     # tg.AddHeighFieldFromImage(position=[-1.5, 2.0, 0.0],
@@ -324,5 +324,30 @@ if __name__ == "__main__":
     #                           input_img="./unitree_robot.jpeg",
     #                           image_scale=[1.0, 1.0],
     #                           output_hfield_image="unitree_hfield.png")
+
+    # starting floor
+    BASE_HEIGHT = -0.5
+    FLOOR_WIDTH = 5.0
+    tg.AddBox(
+        position=[0.0, 0.0, BASE_HEIGHT], euler=[0, 0, 0.0], size=[5, FLOOR_WIDTH, 1]
+    )
+
+    # randomized gaps
+    HOLES = 100
+    MIN_GAP = 0.3
+    MAX_GAP = 1.0
+    MIN_FLOOR_LEN = 2.5
+    MAX_FLOOR_LEN = 6.0
+    last_x = FLOOR_WIDTH / 2.0
+    for i in range(HOLES):
+        floor_len = np.random.uniform(MIN_FLOOR_LEN, MAX_FLOOR_LEN)
+        gap_size = np.random.uniform(MIN_GAP, MAX_GAP)
+        new_center_x = last_x + gap_size + (floor_len / 2.0)
+        tg.AddBox(
+            position=[new_center_x, 0.0, BASE_HEIGHT],
+            euler=[0, 0, 0.0],
+            size=[floor_len, FLOOR_WIDTH, 1],
+        )
+        last_x = new_center_x + (floor_len / 2.0)
 
     tg.Save()
