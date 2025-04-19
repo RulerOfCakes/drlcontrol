@@ -48,6 +48,27 @@ class LeggedObsConfig:
         -np.inf,
         np.inf,
     )  # range of contact forces to be clipped in the observation
+    terrain_profile_circular_radius: float = (
+        0.0  # radius of the terrain profile around the robot
+    )
+    terrain_profile_circular_resolution: int = (
+        0  # resolution of the terrain profile around the robot
+    )
+
+    terrain_profile_ray_origin: np.ndarray = np.array(
+        [0.0, 0.0, 0.0]
+    )  # origin of the ray for terrain profile
+    terrain_profile_ray_direction: np.ndarray = np.array(
+        [1.0, 0.0, 0.0]
+    )  # direction of the ray for terrain profile
+    terrain_profile_ray_length: float = (
+        0.0  # length between the origin and the terrain profile window
+    )
+    terrain_profile_ray_dimension: tuple[float, float] = (
+        0.0,
+        0.0,
+    )  # dimension of the ray for terrain profile
+    terrain_profile_ray_resolution: tuple[float, float] = (1.0, 1.0)
 
 
 class LeggedEnv(MujocoEnv):
@@ -156,6 +177,7 @@ class LeggedEnv(MujocoEnv):
 
         self._prev_action = np.zeros(self.action_space.shape[0], dtype=np.float64)
 
+    ### Observations
     @property
     def cvel(self):
         """
@@ -201,6 +223,104 @@ class LeggedEnv(MujocoEnv):
             robot_height < self.body_cfg.termination_height_range[0]
             or robot_height > self.body_cfg.termination_height_range[1]
         )
+
+    def terrain_profile_circular(self) -> np.ndarray:
+        """
+        Returns the terrain profile in a circular pattern around the robot.
+        """
+
+        radius = self.obs_cfg.terrain_profile_circular_radius
+        resolution = self.obs_cfg.terrain_profile_circular_resolution
+
+        if resolution <= 0 or radius <= 0:
+            raise ValueError(
+                "Resolution and radius must be greater than 0 for circular terrain profile."
+            )
+
+        robot_pos = self.data.body(self.body_cfg.main_body).xpos[:3]
+        robot_x, robot_y, robot_z = robot_pos[0], robot_pos[1], robot_pos[2]
+        profile_coords = [
+            (robot_x + x, robot_y + y)
+            for x in np.linspace(-radius, radius, resolution)
+            for y in np.linspace(-radius, radius, resolution)
+        ]
+
+        terrain_profiles = []
+        for x, y in profile_coords:
+            # Cast a ray from the robot to the terrain profile point
+            ray_origin = np.array([x, y, robot_z]).reshape(3, 1)
+            ray_direction = np.array([0.0, 0.0, -1.0]).reshape(3, 1)
+            intersection_geoms = np.zeros((1, 1), dtype=np.int32)
+
+            result = mujoco.mj_ray(
+                self.model,
+                self.data,
+                ray_origin,
+                ray_direction,
+                None,
+                1,
+                self.body_cfg.main_body,
+                intersection_geoms,
+            )
+
+            if result != -1:
+                terrain_profiles.append(result)
+            else:
+                terrain_profiles.append(0.0)  # arbitrary default value
+
+        return np.array(terrain_profiles, dtype=np.float64)
+
+    def terrain_profile_ray(self) -> np.ndarray:
+        """
+        Returns the raycast terrain profile from the robot.
+        """
+        origin = self.obs_cfg.terrain_profile_ray_origin
+        direction = self.obs_cfg.terrain_profile_ray_direction
+        length = self.obs_cfg.terrain_profile_ray_length
+        dimension = self.obs_cfg.terrain_profile_ray_dimension
+        resolution = self.obs_cfg.terrain_profile_ray_resolution
+
+        # convert local frame coordinate to world frame coordinate
+        body_rot = self.data.body(self.body_cfg.main_body).xmat.copy().reshape(3, 3)
+        origin = body_rot @ origin + self.data.body(self.body_cfg.main_body).xpos[:3]
+        direction = body_rot @ direction
+        direction = direction / np.linalg.norm(direction)
+
+        window_center = origin + direction * length
+        dx = np.cross(direction, np.array([0.0, 0.0, 1.0]))
+        dx = dx / np.linalg.norm(dx) * dimension[0] / 2.0
+        dy = np.cross(direction, dx)
+        dy = dy / np.linalg.norm(dy) * dimension[1] / 2.0
+        x_coords = np.linspace(-dx, dx, resolution[0])
+        y_coords = np.linspace(-dy, dy, resolution[1])
+        terrain_profile_coords = [
+            (window_center + x + y) for x in x_coords for y in y_coords
+        ]
+        terrain_profiles = []
+
+        for v in terrain_profile_coords:
+            # Cast a ray from the robot to the terrain profile point
+            ray_origin = origin
+            ray_direction = v - ray_origin
+            intersection_geoms = np.zeros((1, 1), dtype=np.int32)
+
+            result = mujoco.mj_ray(
+                self.model,
+                self.data,
+                ray_origin,
+                ray_direction,
+                None,
+                1,
+                self.body_cfg.main_body,
+                intersection_geoms,
+            )
+
+            if result != -1:
+                terrain_profiles.append(result)
+            else:
+                terrain_profiles.append(0.0)
+
+        return np.array(terrain_profiles, dtype=np.float64)
 
     ### Rewards
     def _reward_healthy(self) -> float:
