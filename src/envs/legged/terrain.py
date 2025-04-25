@@ -21,7 +21,6 @@ class LeggedTerrainEnv(LeggedEnv):
     Can use any legged robot model.
 
     The goal of this environment is to achieve stable locomotion on bumpy terrain.
-    A site by the name of "target_site" must be defined as a direct descendent of <worldbody/> in the given mjcf file.
     """
 
     metadata = {
@@ -86,7 +85,6 @@ class LeggedTerrainEnv(LeggedEnv):
             exclude_current_positions_from_observation=exclude_current_positions_from_observation,
             include_cfrc_ext_in_observation=include_cfrc_ext_in_observation,
             contact_force_range=contact_force_range,
-            
             terrain_profile_circular_radius=terrain_profile_radius,
             terrain_profile_circular_resolution=terrain_profile_resolution,
         )
@@ -103,8 +101,6 @@ class LeggedTerrainEnv(LeggedEnv):
         self._spawn_radius = spawn_radius
 
         self._randomize_target_position = randomize_target_position
-
-        self.target_site_id = None  # site ID for the target position
 
         self.metadata = LeggedTerrainEnv.metadata
 
@@ -252,10 +248,10 @@ class LeggedTerrainEnv(LeggedEnv):
             qpos = qpos[2:]
 
         profile_coords, profile_data = self.terrain_profile_circular()
-        
+
         # save data for rendering phase
         self._last_profile_coords = profile_coords
-        
+
         obs = np.concatenate(
             [qpos, qvel, relative_target_pos, relative_vel, profile_data]
         )
@@ -336,28 +332,18 @@ class LeggedTerrainEnv(LeggedEnv):
         if self.mujoco_renderer.viewer is None:
             super().render(*args, **kwargs)
         else:
-            self._update_render_target()
-            # self._render_forward_dir()
+            self._render_target()
             self._render_info()
             if len(self._last_profile_coords) > 0:
                 self._render_terrain_profile_circular(self._last_profile_coords)
             super().render(*args, **kwargs)
 
-    def _update_render_target(self):
-        if self.target_site_id is None:
-            # Find the site ID (or create one in your XML if it doesn't exist)
-            self.target_site_id = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
+    def _render_target(self):
+        self._render_site(
+            np.concatenate(
+                [self.target_pos, [self._get_ground_height(*self.target_pos)]]
             )
-            if self.target_site_id == -1:
-                raise ValueError(
-                    "Site 'target_site' not found in the XML model. Please add it."
-                )
-
-        # Update the site's position
-        self.model.site_pos[self.target_site_id] = np.concatenate(
-            [self.target_pos, [self._get_ground_height(*self.target_pos)]]
-        )  # Adjust Z as needed
+        )
 
     def _render_forward_dir(self):
         # Render the target position in the forward direction of the robot

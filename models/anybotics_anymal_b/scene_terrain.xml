@@ -17,6 +17,5 @@
 
     <worldbody>
         <light pos="0 0 1.5" dir="0 0 -1" directional="true" />
-        <site name="target_site" pos="0 0 0.1" size="0.1" rgba="1 0 0 0.7" />
     <geom type="hfield" hfield="perlin_hfield" pos="0.0 0.0 -0.5" quat="1.0 0.0 0.0 0.0" /></worldbody>
 </mujoco>
