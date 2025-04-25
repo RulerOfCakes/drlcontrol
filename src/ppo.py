@@ -771,13 +771,13 @@ parent_path = os.path.dirname(current_path)
 models_path = os.path.join(parent_path, "models")
 
 env = gym.make(
-    "LeggedForwardEnv",
+    "LeggedTerrainEnv",
     render_mode="human",
     frame_skip=5,
     max_episode_steps=20000,  # physics steps will have been multiplied by 5, due to the frame_skip value
-    xml_file=os.path.join(models_path, "boston_dynamics_spot/scene_gap.xml"),
+    xml_file=os.path.join(models_path, "boston_dynamics_spot/scene_smooth_perlin.xml"),
     # termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
-    forward_reward_weight=700,
+    # forward_reward_weight=700,
     termination_cost=2000,
 )
 

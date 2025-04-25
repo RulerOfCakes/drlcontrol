@@ -57,11 +57,11 @@ class LeggedObsConfig:
         0  # resolution of the terrain profile around the robot
     )
 
-    terrain_profile_ray_origin: np.ndarray = np.array(
-        [0.0, 0.0, 0.0]
+    terrain_profile_ray_origin: np.ndarray = field(
+        default_factory=lambda: np.array([0.0, 0.0, 0.0])
     )  # origin of the ray for terrain profile
-    terrain_profile_ray_direction: np.ndarray = np.array(
-        [1.0, 0.0, 0.0]
+    terrain_profile_ray_direction: np.ndarray = field(
+        default_factory=lambda: np.array([1.0, 0.0, 0.0])
     )  # direction of the ray for terrain profile
     terrain_profile_ray_length: float = (
         0.0  # length between the origin and the terrain profile window
@@ -377,6 +377,27 @@ class LeggedEnv(MujocoEnv):
         """
         z_vel: float = (pos[2] - prev_pos[2]) / self.dt
         return np.square(z_vel)
+
+    def _get_ground_height(self, x: float, y: float) -> float:
+        INF_HEIGHT = 100.0
+        ray_start = np.array([x, y, INF_HEIGHT], dtype=np.float64).reshape(3, 1)
+        ray_dir = np.array([0, 0, -1], dtype=np.float64).reshape(3, 1)
+        intersection_geoms = np.zeros((1, 1), dtype=np.int32)
+        result = mujoco.mj_ray(
+            self.model,
+            self.data,
+            ray_start,
+            ray_dir,
+            None,
+            1,  # include static geoms
+            self.body_cfg.main_body,
+            intersection_geoms,
+        )
+        if result != -1:
+            intersection_distance_from_body_height = result
+            return INF_HEIGHT - intersection_distance_from_body_height
+        else:
+            return -INF_HEIGHT
 
     def _render_terrain_profile_circular(
         self,

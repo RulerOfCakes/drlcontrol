@@ -93,6 +93,8 @@ class SpotEnvV2(LeggedEnv):
                 exclude_current_positions_from_observation=exclude_current_positions_from_observation,
                 include_cfrc_ext_in_observation=include_cfrc_ext_in_observation,
                 contact_force_range=contact_force_range,
+                terrain_profile_circular_radius=terrain_profile_radius,
+                terrain_profile_circular_resolution=terrain_profile_resolution,
             ),
             **kwargs,
         )
@@ -124,51 +126,6 @@ class SpotEnvV2(LeggedEnv):
         control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
         return control_cost
 
-    def terrain_profile(self) -> np.ndarray:
-        """
-        Returns the terrain profile around the robot.
-        """
-        rad = self._terrain_profile_radius
-        res = self._terrain_profile_resolution
-
-        robot_pos = self.data.qpos[:3]  # get the x and y coordinates of the robot
-        robot_x, robot_y, robot_z = robot_pos[0], robot_pos[1], robot_pos[2]
-
-        profile_coords = [
-            (x, y)
-            for x in np.linspace(robot_x - rad, robot_x + rad, res)
-            for y in np.linspace(robot_y - rad, robot_y + rad, res)
-        ]
-
-        terrain_profile_list = []
-        for world_x, world_y in profile_coords:
-            world_point = np.array([world_x, world_y, 0.0], dtype=np.float64)
-            ray_start = (world_point + np.array([0, 0, robot_z])).reshape(
-                3, 1
-            )  # assuming that the main body is at the center of the robot above ground
-            ray_dir = (world_point + np.array([0, 0, -1])).reshape(3, 1)
-            intersection_geoms = np.zeros((1, 1), dtype=np.int32)
-
-            result = mujoco.mj_ray(
-                self.model,
-                self.data,
-                ray_start,
-                ray_dir,
-                None,
-                1,  # include static geoms
-                self._main_body,
-                intersection_geoms,
-            )
-
-            if result != -1:
-                intersection_distance_from_body_height = result
-                terrain_profile_list.append(intersection_distance_from_body_height)
-            else:
-                terrain_profile_list.append(0.0)  # default value can be changed
-
-        terrain_profile_array = np.array(terrain_profile_list, dtype=np.float64)
-        return terrain_profile_array
-
     def _get_obs(self):
         # get the current state of the robot
         qpos = self.data.qpos.copy()
@@ -181,7 +138,7 @@ class SpotEnvV2(LeggedEnv):
         obs = np.concatenate([qpos, qvel])
 
         # include the terrain profile around the robot
-        obs = np.concatenate([obs, self.terrain_profile()])
+        obs = np.concatenate([obs, self.terrain_profile_circular()])
 
         # include the external forces acting on the robot
         if self._include_cfrc_ext_in_observation:
@@ -243,13 +200,8 @@ class SpotEnvV2(LeggedEnv):
 
         return observation, reward, terminated, False, info
 
-    def render_terrain_profile(self):
-        if self.render_mode != "human":
-            return
-
-        # get the terrain profile around the robot
-
     def render(self, *args, **kwargs):
+        self._render_terrain_profile_circular()
         super().render(*args, **kwargs)
 
     def reset_model(self):

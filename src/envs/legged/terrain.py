@@ -86,6 +86,9 @@ class LeggedTerrainEnv(LeggedEnv):
             exclude_current_positions_from_observation=exclude_current_positions_from_observation,
             include_cfrc_ext_in_observation=include_cfrc_ext_in_observation,
             contact_force_range=contact_force_range,
+            
+            terrain_profile_circular_radius=terrain_profile_radius,
+            terrain_profile_circular_resolution=terrain_profile_resolution,
         )
 
         self._max_target_range = max_target_range
@@ -104,8 +107,6 @@ class LeggedTerrainEnv(LeggedEnv):
         self.target_site_id = None  # site ID for the target position
 
         self.metadata = LeggedTerrainEnv.metadata
-        self._terrain_profile_radius = terrain_profile_radius
-        self._terrain_profile_resolution = terrain_profile_resolution
 
         LeggedEnv.__init__(
             self,
@@ -147,6 +148,7 @@ class LeggedTerrainEnv(LeggedEnv):
         self._prev_pos = self.data.body(
             self.body_cfg.main_body
         ).xpos.copy()  # previous position of the robot
+        self._last_profile_coords = np.array([])
         self.step_info = {}  # for debugging purposes
 
     @property
@@ -201,72 +203,6 @@ class LeggedTerrainEnv(LeggedEnv):
         displacement_on_target_direction = np.dot(displacement, target_direction)
         return displacement_on_target_direction
 
-    def _get_ground_height(self, x: float, y: float) -> float:
-        INF_HEIGHT = 100.0
-        ray_start = np.array([x, y, INF_HEIGHT], dtype=np.float64).reshape(3, 1)
-        ray_dir = np.array([0, 0, -1], dtype=np.float64).reshape(3, 1)
-        intersection_geoms = np.zeros((1, 1), dtype=np.int32)
-        result = mujoco.mj_ray(
-            self.model,
-            self.data,
-            ray_start,
-            ray_dir,
-            None,
-            1,  # include static geoms
-            self.body_cfg.main_body,
-            intersection_geoms,
-        )
-        if result != -1:
-            intersection_distance_from_body_height = result
-            return INF_HEIGHT - intersection_distance_from_body_height
-        else:
-            return -INF_HEIGHT
-
-    def terrain_profile(self) -> np.ndarray:
-        """
-        Returns the terrain profile around the robot.
-        """
-        rad = self._terrain_profile_radius
-        res = self._terrain_profile_resolution
-
-        robot_pos = self.data.body(self.body_cfg.main_body).xpos[:3]
-        robot_x, robot_y, robot_z = robot_pos[0], robot_pos[1], robot_pos[2]
-
-        profile_coords = [
-            (x, y)
-            for x in np.linspace(robot_x - rad, robot_x + rad, res)
-            for y in np.linspace(robot_y - rad, robot_y + rad, res)
-        ]
-
-        terrain_profile_list = []
-        for world_x, world_y in profile_coords:
-            world_point = np.array([world_x, world_y, 0.0], dtype=np.float64)
-            ray_start = (world_point + np.array([0, 0, robot_z])).reshape(
-                3, 1
-            )  # assuming that the main body is at the center of the robot above ground
-            ray_dir = (world_point + np.array([0, 0, -1])).reshape(3, 1)
-            intersection_geoms = np.zeros((1, 1), dtype=np.int32)
-
-            result = mujoco.mj_ray(
-                self.model,
-                self.data,
-                ray_start,
-                ray_dir,
-                None,
-                1,  # include static geoms
-                self.body_cfg.main_body,
-                intersection_geoms,
-            )
-
-            if result != -1:
-                intersection_distance_from_body_height = result
-                terrain_profile_list.append(intersection_distance_from_body_height)
-            else:
-                terrain_profile_list.append(0.0)  # default value can be changed
-
-        terrain_profile_array = np.array(terrain_profile_list, dtype=np.float64)
-        return terrain_profile_array
-
     # z coordinate is omitted as the robot is expected to move in the x-y plane
     def _generate_target_position(self, center_x: float, center_y: float):
         r = self.np_random.uniform(low=self._target_range, high=self._target_range)
@@ -315,8 +251,13 @@ class LeggedTerrainEnv(LeggedEnv):
         if self.obs_cfg.exclude_current_positions_from_observation:
             qpos = qpos[2:]
 
+        profile_coords, profile_data = self.terrain_profile_circular()
+        
+        # save data for rendering phase
+        self._last_profile_coords = profile_coords
+        
         obs = np.concatenate(
-            [qpos, qvel, relative_target_pos, relative_vel, self.terrain_profile()]
+            [qpos, qvel, relative_target_pos, relative_vel, profile_data]
         )
 
         # include the external forces acting on the robot
@@ -398,6 +339,8 @@ class LeggedTerrainEnv(LeggedEnv):
             self._update_render_target()
             # self._render_forward_dir()
             self._render_info()
+            if len(self._last_profile_coords) > 0:
+                self._render_terrain_profile_circular(self._last_profile_coords)
             super().render(*args, **kwargs)
 
     def _update_render_target(self):
@@ -416,36 +359,6 @@ class LeggedTerrainEnv(LeggedEnv):
             [self.target_pos, [self._get_ground_height(*self.target_pos)]]
         )  # Adjust Z as needed
 
-    # INFO: A manual patch for self.mujoco_renderer.viewer.add_marker is required until the following PR is released:
-    # https://github.com/Farama-Foundation/Gymnasium/pull/1329
-    def _render_arrow(
-        self,
-        origin: np.ndarray,
-        dir: np.ndarray,
-        length: float = 1.0,
-        color: np.ndarray = np.array([0.0, 1.0, 0.0, 1.0]),
-    ):
-        # Create a 3D arrow using the provided origin, direction, and length
-        dir = (
-            dir / np.linalg.norm(dir) if np.linalg.norm(dir) > 0 else np.zeros_like(dir)
-        )
-
-        up_dir = np.array([0, 0, 1])  # default orientation of mujoco arrow
-
-        rotation = rotation_matrix(
-            np.cross(up_dir, dir),
-            np.arccos(np.dot(up_dir, dir)),
-        ).flatten()
-
-        # Add the arrow to the viewer
-        self.mujoco_renderer.viewer.add_marker(
-            type=mujoco.mjtGeom.mjGEOM_ARROW,
-            pos=origin,
-            mat=rotation,
-            size=np.array([0.05, 0.05, length]),
-            rgba=color,
-        )
-
     def _render_forward_dir(self):
         # Render the target position in the forward direction of the robot
         body_rotation = self.data.body(self.body_cfg.main_body).xmat.reshape(3, 3)
@@ -462,52 +375,6 @@ class LeggedTerrainEnv(LeggedEnv):
             dir=forward_direction,
             length=1.0,
         )
-
-    def _render_terrain_profile(self):
-        # Render the terrain profile around the robot
-        rad = self._terrain_profile_radius
-        res = self._terrain_profile_resolution
-
-        robot_pos = self.data.qpos[:3]  # get the x and y coordinates of the robot
-        robot_x, robot_y, robot_z = robot_pos[0], robot_pos[1], robot_pos[2]
-
-        profile_coords = [
-            (x, y)
-            for x in np.linspace(robot_x - rad, robot_x + rad, res)
-            for y in np.linspace(robot_y - rad, robot_y + rad, res)
-        ]
-
-        for world_x, world_y in profile_coords:
-            world_point = np.array([world_x, world_y, 0.0], dtype=np.float64)
-            ray_start = (world_point + np.array([0, 0, robot_z])).reshape(
-                3, 1
-            )  # assuming that the main body is at the center of the robot above ground
-            ray_dir = (world_point + np.array([0, 0, -1])).reshape(3, 1)
-            intersection_geoms = np.zeros((1, 1), dtype=np.int32)
-
-            result = mujoco.mj_ray(
-                self.model,
-                self.data,
-                ray_start,
-                ray_dir,
-                None,
-                1,  # include static geoms
-                self.body_cfg.main_body,
-                intersection_geoms,
-            )
-            site_height = robot_z
-
-            if result != -1:
-                intersection_distance_from_body_height = result
-                site_height = robot_z - intersection_distance_from_body_height
-            else:
-                site_height = robot_z
-            self.mujoco_renderer.viewer.add_marker(
-                type=mujoco.mjtGeom.mjGEOM_SPHERE,
-                pos=np.array([world_x, world_y, site_height]),
-                size=np.array([0.05]),  # Adjust size as needed
-                rgba=np.array([0.0, 0.0, 1.0, 1.0]),
-            )
 
     def _render_info(self):
         if self.render_mode != "human":
