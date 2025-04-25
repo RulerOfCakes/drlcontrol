@@ -85,6 +85,7 @@ class LeggedTerrainEnv(LeggedEnv):
             exclude_current_positions_from_observation=exclude_current_positions_from_observation,
             include_cfrc_ext_in_observation=include_cfrc_ext_in_observation,
             contact_force_range=contact_force_range,
+            include_circular_terrain_profile=True,
             terrain_profile_circular_radius=terrain_profile_radius,
             terrain_profile_circular_resolution=terrain_profile_resolution,
         )
@@ -128,13 +129,9 @@ class LeggedTerrainEnv(LeggedEnv):
         # relative velocity vector (x,y,z)
         obs_size += 3
 
-        # terrain profile
-        obs_size += terrain_profile_resolution**2
-
         # modify metadata for the final observation space
         self.observation_structure["relative_target_pos"] = 2
         self.observation_structure["relative_velocity"] = 3
-        self.observation_structure["terrain_profile"] = terrain_profile_resolution**2
 
         # update the observation space
         self.observation_space = Box(

@@ -41,12 +41,24 @@ class LeggedForwardEnv(LeggedEnv):
         termination_contacts: List[Union[int, str]] = [
             1
         ],  # contacts that will terminate the episode
-        termination_height_range: Tuple[float, float] = (-np.inf, np.inf),  # height range for termination
+        termination_height_range: Tuple[float, float] = (
+            -np.inf,
+            np.inf,
+        ),  # height range for termination
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
         termination_cost: float = 1000.0,  # penalty for terminating the episode early
         ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
+        use_circular_terrain_profile: bool = False,
+        use_forward_terrain_profile: bool = False,
+        circular_terrain_profile_radius: float = 2.0,
+        circular_terrain_profile_resolution: float = 5.0,
+        forward_terrain_profile_origin: np.ndarray = np.array([1.0, 0.0, 0.5]),
+        forward_terrain_profile_direction: np.ndarray = np.array([1.0, 0.0, 0.0]),
+        forward_terrain_profile_length: float = 5.0,
+        forward_terrain_profile_dimension: tuple[float, float] = (5, 5),
+        forward_terrain_profile_resolution: tuple[int, int] = (5, 5),
         exclude_current_positions_from_observation: bool = True,
         include_cfrc_ext_in_observation: bool = False,
         include_cvel_in_observation: bool = False,
@@ -69,6 +81,9 @@ class LeggedForwardEnv(LeggedEnv):
 
         # clip range for rewards related to contact forces
         self._contact_force_range = contact_force_range
+
+        self.use_circular_terrain_profile = use_circular_terrain_profile
+        self.use_forward_terrain_profile = use_forward_terrain_profile
 
         self._exclude_current_positions_from_observation = (
             exclude_current_positions_from_observation
@@ -97,7 +112,16 @@ class LeggedForwardEnv(LeggedEnv):
             include_cvel_in_observation=include_cvel_in_observation,
             include_qfrc_actuator_in_observation=include_qfrc_actuator_in_observation,
             include_cinert_in_observation=include_cinert_in_observation,
+            include_circular_terrain_profile=use_circular_terrain_profile,
+            include_forward_terrain_profile=use_forward_terrain_profile,
             contact_force_range=contact_force_range,
+            terrain_profile_circular_radius=circular_terrain_profile_radius,
+            terrain_profile_circular_resolution=circular_terrain_profile_resolution,
+            terrain_profile_ray_resolution=forward_terrain_profile_resolution,
+            terrain_profile_ray_dimension=forward_terrain_profile_dimension,
+            terrain_profile_ray_direction=forward_terrain_profile_direction,
+            terrain_profile_ray_length=forward_terrain_profile_length,
+            terrain_profile_ray_origin=forward_terrain_profile_origin,
         )
 
         LeggedEnv.__init__(
@@ -123,7 +147,7 @@ class LeggedForwardEnv(LeggedEnv):
 
         obs_size = self.observation_space.shape[0]
 
-        # we also add a relative angle between the forward vector of the torso and the x-axis
+        # add a relative angle between the forward vector of the torso and the x-axis
         obs_size += 1
 
         # metadata for the final observation space
