@@ -53,8 +53,8 @@ class LeggedForwardEnv(LeggedEnv):
         use_circular_terrain_profile: bool = False,
         use_forward_terrain_profile: bool = False,
         circular_terrain_profile_radius: float = 2.0,
-        circular_terrain_profile_resolution: float = 5.0,
-        forward_terrain_profile_origin: np.ndarray = np.array([1.0, 0.0, 0.5]),
+        circular_terrain_profile_resolution: int = 5,
+        forward_terrain_profile_origin: np.ndarray = np.array([0.5, 0.0, 0.3]),
         forward_terrain_profile_direction: np.ndarray = np.array([1.0, 0.0, 0.0]),
         forward_terrain_profile_length: float = 5.0,
         forward_terrain_profile_dimension: tuple[float, float] = (5, 5),
@@ -225,6 +225,16 @@ class LeggedForwardEnv(LeggedEnv):
             self.render()
 
         return observation, reward, terminated, False, info
+
+    def render(self, *args, **kwargs):
+        if self.mujoco_renderer.viewer is None:
+            super().render(*args, **kwargs)
+        else:
+            if self.obs_cfg.include_circular_terrain_profile and len(self._prev_circular_profile_coords) > 0:
+                self._render_terrain_profile_circular(self._prev_circular_profile_coords)
+            if self.obs_cfg.include_forward_terrain_profile and len(self._prev_forward_profile_coords) > 0:
+                self._render_terrain_profile_ray(self._prev_forward_profile_coords)
+            super().render(*args, **kwargs)
 
     def reset_model(self):
         noise_low = -self._reset_noise_scale

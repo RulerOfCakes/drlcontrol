@@ -196,6 +196,8 @@ class LeggedEnv(MujocoEnv):
         )
 
         self._prev_action = np.zeros(self.action_space.shape[0], dtype=np.float64)
+        self._prev_circular_profile_coords = np.array([])
+        self._prev_forward_profile_coords = np.array([])
 
     ### Observations
     @property
@@ -299,6 +301,11 @@ class LeggedEnv(MujocoEnv):
             np.array(formatted_profile_coords),
             np.array(terrain_profiles, dtype=np.float64),
         )
+
+    def _local_to_global(self, vec: np.ndarray) -> np.ndarray:
+        body_rot = self.data.body(self.body_cfg.main_body).xmat.copy().reshape(3, 3)
+        vec = body_rot @ vec
+        return vec
 
     def terrain_profile_ray(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -433,12 +440,14 @@ class LeggedEnv(MujocoEnv):
     ):
         # Render the terrain profile ray
         if self.render_mode == "human":
+            ray_origin = self._local_to_global(self.obs_cfg.terrain_profile_ray_origin)
+            ray_origin += self.data.body(self.body_cfg.main_body).xpos[:3]
             for ray_target in ray_targets:
                 self._render_arrow(
-                    origin=self.obs_cfg.terrain_profile_ray_origin,
-                    dir=ray_target,
+                    origin=ray_origin,
+                    dir=ray_target-ray_origin,
                     length=np.linalg.norm(
-                        ray_target
+                        ray_target-ray_origin
                     ),  # TODO: fix this with actual raycast result
                     color=color,
                 )
@@ -513,6 +522,16 @@ class LeggedEnv(MujocoEnv):
 
         if self.obs_cfg.include_cvel_in_observation:
             obs = np.concatenate([obs, self.cvel])
+
+        if self.obs_cfg.include_circular_terrain_profile:
+            profile_coords, profile_data = self.terrain_profile_circular()
+            self._prev_circular_profile_coords = profile_coords
+            obs = np.concatenate([obs, profile_data])
+
+        if self.obs_cfg.include_forward_terrain_profile:
+            ray_targets, ray_data = self.terrain_profile_ray()
+            self._prev_forward_profile_coords = ray_targets
+            obs = np.concatenate([obs, ray_data])
 
         return obs
 
