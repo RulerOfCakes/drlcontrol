@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
 from gymnasium.spaces import Box
 from gymnasium.envs.mujoco import MujocoEnv
 import mujoco
 import numpy as np
+
+from utils.linalg import rotation_matrix
 
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
@@ -224,7 +226,7 @@ class LeggedEnv(MujocoEnv):
             or robot_height > self.body_cfg.termination_height_range[1]
         )
 
-    def terrain_profile_circular(self) -> np.ndarray:
+    def terrain_profile_circular(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Returns the terrain profile in a circular pattern around the robot.
         """
@@ -268,11 +270,21 @@ class LeggedEnv(MujocoEnv):
             else:
                 terrain_profiles.append(0.0)  # arbitrary default value
 
-        return np.array(terrain_profiles, dtype=np.float64)
+        # modify profile coords to 3d ndarray format
+        formatted_profile_coords = []
+        for i in range(0, len(profile_coords)):
+            x, y = profile_coords[i]
+            z_dist = terrain_profiles[i]
+            formatted_profile_coords.append(np.array([x, y, robot_z - z_dist]))
 
-    def terrain_profile_ray(self) -> np.ndarray:
+        return (
+            np.array(formatted_profile_coords),
+            np.array(terrain_profiles, dtype=np.float64),
+        )
+
+    def terrain_profile_ray(self) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Returns the raycast terrain profile from the robot.
+        Returns the raycast terrain profile(depthmap) from the robot.
         """
         origin = self.obs_cfg.terrain_profile_ray_origin
         direction = self.obs_cfg.terrain_profile_ray_direction
@@ -302,6 +314,8 @@ class LeggedEnv(MujocoEnv):
             # Cast a ray from the robot to the terrain profile point
             ray_origin = origin
             ray_direction = v - ray_origin
+            ray_length = np.linalg.norm(ray_direction)
+
             intersection_geoms = np.zeros((1, 1), dtype=np.int32)
 
             result = mujoco.mj_ray(
@@ -315,12 +329,15 @@ class LeggedEnv(MujocoEnv):
                 intersection_geoms,
             )
 
-            if result != -1:
+            if result != -1 and result < ray_length:
                 terrain_profiles.append(result)
             else:
                 terrain_profiles.append(0.0)
 
-        return np.array(terrain_profiles, dtype=np.float64)
+        return (
+            np.array(terrain_profile_coords),
+            np.array(terrain_profiles, dtype=np.float64),
+        )
 
     ### Rewards
     def _reward_healthy(self) -> float:
@@ -360,6 +377,80 @@ class LeggedEnv(MujocoEnv):
         """
         z_vel: float = (pos[2] - prev_pos[2]) / self.dt
         return np.square(z_vel)
+
+    def _render_terrain_profile_circular(
+        self,
+        profile_coords: np.ndarray,
+        color: np.ndarray = np.array([0.0, 0.0, 1.0, 1.0]),
+    ):
+        if self.render_mode == "human":
+            for pos in profile_coords:
+                self._render_site(pos=pos, color=color)
+
+    def _render_terrain_profile_ray(
+        self,
+        ray_targets: np.ndarray,
+        color: np.ndarray = np.array([0.0, 0.0, 1.0, 1.0]),
+    ):
+        # Render the terrain profile ray
+        if self.render_mode == "human":
+            for ray_target in ray_targets:
+                self._render_arrow(
+                    origin=self.obs_cfg.terrain_profile_ray_origin,
+                    dir=ray_target,
+                    length=np.linalg.norm(
+                        ray_target
+                    ),  # TODO: fix this with actual raycast result
+                    color=color,
+                )
+
+    # INFO: A manual patch for self.mujoco_renderer.viewer.add_marker is required until the following PR is released:
+    # https://github.com/Farama-Foundation/Gymnasium/pull/1329
+    def _render_site(
+        self,
+        pos: np.ndarray,
+        color: np.ndarray = np.array([0.0, 1.0, 0.0, 1.0]),
+        radius: float = 0.05,
+    ):
+        # Render the site at the given position
+        if self.render_mode == "human":
+            self.mujoco_renderer.viewer.add_marker(
+                type=mujoco.mjtGeom.mjGEOM_SPHERE,
+                pos=pos,
+                mat=np.eye(3).flatten(),
+                size=np.array([radius, radius, radius]),
+                rgba=color,
+            )
+
+    def _render_arrow(
+        self,
+        origin: np.ndarray,
+        dir: np.ndarray,
+        length: float = 1.0,
+        color: np.ndarray = np.array([0.0, 1.0, 0.0, 1.0]),
+    ):
+        if self.render_mode != "human":
+            return
+        # Create a 3D arrow using the provided origin, direction, and length
+        dir = (
+            dir / np.linalg.norm(dir) if np.linalg.norm(dir) > 0 else np.zeros_like(dir)
+        )
+
+        up_dir = np.array([0, 0, 1])  # default orientation of mujoco arrow
+
+        rotation = rotation_matrix(
+            np.cross(up_dir, dir),
+            np.arccos(np.dot(up_dir, dir)),
+        ).flatten()
+
+        # Add the arrow to the viewer
+        self.mujoco_renderer.viewer.add_marker(
+            type=mujoco.mjtGeom.mjGEOM_ARROW,
+            pos=origin,
+            mat=rotation,
+            size=np.array([0.05, 0.05, length]),
+            rgba=color,
+        )
 
     def _get_obs(self):
         # get the current state of the robot
