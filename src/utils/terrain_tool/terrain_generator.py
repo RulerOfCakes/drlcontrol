@@ -3,12 +3,6 @@ import numpy as np
 import cv2
 import noise
 
-# Change these parameters!
-ROBOT = "boston_dynamics_spot"
-ROBOT_DIR = "../../../models/" + ROBOT
-INPUT_SCENE_PATH = ROBOT_DIR + "/scene.xml"
-OUTPUT_SCENE_PATH = ROBOT_DIR + "/scene_gap.xml"
-
 
 # zyx euler angle to quaternion
 def euler_to_quat(roll, pitch, yaw):
@@ -78,9 +72,17 @@ def list_to_str(vec):
 
 
 class TerrainGenerator:
+    # These are example values, you should replace them with your actual paths in the constructor
+    ROBOT = "anybotics_anymal_b"
+    ROBOT_DIR = "../../../models/" + ROBOT
+    INPUT_SCENE_PATH = ROBOT_DIR + "/target.xml"
+    OUTPUT_SCENE_PATH = ROBOT_DIR + "/scene_terrain.xml"
 
-    def __init__(self) -> None:
-        self.scene = xml_et.parse(INPUT_SCENE_PATH)
+    def __init__(self, robot_dir: str, input_scene: str, output_scene: str) -> None:
+        self.robot_dir = robot_dir
+        self.input_scene_path = robot_dir + '/'+ input_scene
+        self.output_scene_path = robot_dir +'/'+ output_scene
+        self.scene = xml_et.parse(self.input_scene_path)
         self.root = self.scene.getroot()
         self.worldbody = self.root.find("worldbody")
         self.asset = self.root.find("asset")
@@ -224,7 +226,7 @@ class TerrainGenerator:
                 )
                 terrain_image[y, x] = int((noise_value + 1) / 2 * 255)
 
-        cv2.imwrite(ROBOT_DIR + "/" + output_hfield_image, terrain_image)
+        cv2.imwrite(self.robot_dir + "/" + output_hfield_image, terrain_image)
 
         hfield = xml_et.SubElement(self.asset, "hfield")
         hfield.attrib["name"] = "perlin_hfield"
@@ -263,7 +265,7 @@ class TerrainGenerator:
         terrain_image = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
         if invert_gray:
             terrain_image = 255 - position
-        cv2.imwrite(ROBOT_DIR + "/" + output_hfield_image, terrain_image)
+        cv2.imwrite(self.robot_dir + "/" + output_hfield_image, terrain_image)
 
         hfield = xml_et.SubElement(self.asset, "hfield")
         hfield.attrib["name"] = "image_hfield"
@@ -280,7 +282,7 @@ class TerrainGenerator:
         geo.attrib["quat"] = list_to_str(quat)
 
     def Save(self):
-        self.scene.write(OUTPUT_SCENE_PATH)
+        self.scene.write(self.output_scene_path)
 
 
 if __name__ == "__main__":

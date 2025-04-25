@@ -9,7 +9,6 @@ from envs.legged.base import (
     LeggedInitConfig,
     LeggedObsConfig,
 )
-from utils.linalg import rotation_matrix
 
 DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
