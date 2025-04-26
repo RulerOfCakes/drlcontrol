@@ -41,6 +41,9 @@ class LeggedForwardEnv(LeggedEnv):
         termination_contacts: List[Union[int, str]] = [
             1
         ],  # contacts that will terminate the episode
+        penalized_contacts: List[
+            Union[int, str]
+        ] = [],  # contacts that are penalized by collision cost
         termination_height_range: Tuple[float, float] = (
             -np.inf,
             np.inf,
@@ -48,6 +51,7 @@ class LeggedForwardEnv(LeggedEnv):
         terminate_when_unhealthy: bool = True,  # terminate the episode when the robot is unhealthy
         termination_cost: float = 1000.0,  # penalty for terminating the episode early
         ctrl_cost_weight: float = 0.001,  # penalize large/jerky actions
+        collision_cost_weight: float = 0.0001,  # penalize collisions
         reset_noise_scale: float = 0.005,  # noise scale for resetting the robot's position
         contact_force_range: Tuple[float, float] = (-1.0, 1.0),
         use_circular_terrain_profile: bool = False,
@@ -70,6 +74,7 @@ class LeggedForwardEnv(LeggedEnv):
         self._healthy_reward = healthy_reward
         self._forward_reward_weight = forward_reward_weight
         self._ctrl_cost_weight = ctrl_cost_weight
+        self._collision_cost_weight = collision_cost_weight
 
         # healthy - robot must fit in a certain height range(e.g. not falling down)
         self._terminate_when_unhealthy = terminate_when_unhealthy
@@ -104,7 +109,7 @@ class LeggedForwardEnv(LeggedEnv):
             main_body=main_body,
             termination_contacts=termination_contacts,
             termination_height_range=termination_height_range,
-            penalized_contacts=[],
+            penalized_contacts=penalized_contacts,
         )
         obs_cfg = LeggedObsConfig(
             exclude_current_positions_from_observation=exclude_current_positions_from_observation,
@@ -189,7 +194,8 @@ class LeggedForwardEnv(LeggedEnv):
 
         ctrl_cost = self._reward_control(action) * self._ctrl_cost_weight
         termination_cost = self.is_terminated * self._termination_cost
-        costs = ctrl_cost + termination_cost
+        collision_cost = self._reward_collision() * self._collision_cost_weight
+        costs = ctrl_cost + termination_cost + collision_cost
 
         reward = rewards - costs
 
@@ -197,6 +203,7 @@ class LeggedForwardEnv(LeggedEnv):
             "reward_forward": forward_reward,
             "reward_ctrl": -ctrl_cost,
             "reward_termination": -termination_cost,
+            "reward_collision": -collision_cost,
             "reward_healthy": healthy_reward,
         }
 
@@ -230,9 +237,17 @@ class LeggedForwardEnv(LeggedEnv):
         if self.mujoco_renderer.viewer is None:
             super().render(*args, **kwargs)
         else:
-            if self.obs_cfg.include_circular_terrain_profile and len(self._prev_circular_profile_coords) > 0:
-                self._render_terrain_profile_circular(self._prev_circular_profile_coords)
-            if self.obs_cfg.include_forward_terrain_profile and len(self._prev_forward_profile_coords) > 0:
+            if (
+                self.obs_cfg.include_circular_terrain_profile
+                and len(self._prev_circular_profile_coords) > 0
+            ):
+                self._render_terrain_profile_circular(
+                    self._prev_circular_profile_coords
+                )
+            if (
+                self.obs_cfg.include_forward_terrain_profile
+                and len(self._prev_forward_profile_coords) > 0
+            ):
                 self._render_terrain_profile_ray(self._prev_forward_profile_coords)
             super().render(*args, **kwargs)
 
