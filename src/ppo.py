@@ -750,7 +750,7 @@ class PPO:
                 "actor": self.actor.state_dict(),
                 "actor_optim": self.actor_optim.state_dict(),
                 "critic": self.critic.state_dict(),
-                "ciritc_optim": self.critic_optim.state_dict(),
+                "critic_optim": self.critic_optim.state_dict(),
             },
             "./ppo.pth",
         )
@@ -773,20 +773,28 @@ models_path = os.path.join(parent_path, "models")
 env = gym.make(
     "LeggedForwardEnv",
     render_mode="human",
+    #render_mode="rgb_array",
     frame_skip=5,
     max_episode_steps=20000,  # physics steps will have been multiplied by 5, due to the frame_skip value
     xml_file=os.path.join(models_path, "anybotics_anymal_b/scene_corridor.xml"),
     use_forward_terrain_profile=True,
     use_circular_terrain_profile=True,
-    # termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
-    # forward_reward_weight=700,
-    termination_cost=2000,
+    termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
+    forward_reward_weight=2,
+    termination_cost=500,
+    healthy_reward=0.2,
+    termination_height_range=(-1, 2),
+
+    include_cfrc_ext_in_observation=True,
+    include_cvel_in_observation=True,
+    include_qfrc_actuator_in_observation=True,
+    include_cinert_in_observation=True
 )
 
 myppo = PPO(
     env,
-    reward_scale=0.005,
-    lr=0e-4,
+    reward_scale=0.04,
+    lr=1e-4,
     ent_coef=1e-4,
     timestep_per_batch=5000,
     actor_hidden_dim=1024,
@@ -796,5 +804,5 @@ myppo = PPO(
     lam=0.98,
 )
 
-# myppo.load_model()
+myppo.load_model()
 myppo.learn(10000000000)
