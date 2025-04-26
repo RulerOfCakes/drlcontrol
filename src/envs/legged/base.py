@@ -512,7 +512,7 @@ class LeggedEnv(MujocoEnv):
         obs = np.concatenate([qpos, qvel])
 
         if self.obs_cfg.include_cfrc_ext_in_observation:
-            obs = np.concatenate([obs, self.data.cfrc_ext])
+            obs = np.concatenate([obs, self.contact_forces])
 
         if self.obs_cfg.include_cinert_in_observation:
             obs = np.concatenate([obs, self.cinert])
