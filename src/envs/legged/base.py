@@ -518,7 +518,7 @@ class LeggedEnv(MujocoEnv):
             obs = np.concatenate([obs, self.cinert])
 
         if self.obs_cfg.include_qfrc_actuator_in_observation:
-            obs = np.concatenate([obs, self.actuator_forces])
+            obs = np.concatenate([obs, self.actuator_forces / 20])
 
         if self.obs_cfg.include_cvel_in_observation:
             obs = np.concatenate([obs, self.cvel])
