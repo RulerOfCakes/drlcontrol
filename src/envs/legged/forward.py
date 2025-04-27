@@ -161,6 +161,8 @@ class LeggedForwardEnv(LeggedEnv):
             low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64
         )
 
+        self.step_info = {}
+
     # the z component is ignored as the desired direction is in the x-y plane
     def forward_angle(self):
         target_vector = np.array([-1, 0])
@@ -201,10 +203,10 @@ class LeggedForwardEnv(LeggedEnv):
 
         reward_info = {
             "reward_forward": forward_reward,
+            "reward_healthy": healthy_reward,
             "reward_ctrl": -ctrl_cost,
             "reward_termination": -termination_cost,
             "reward_collision": -collision_cost,
-            "reward_healthy": healthy_reward,
         }
 
         return reward, reward_info
@@ -231,6 +233,8 @@ class LeggedForwardEnv(LeggedEnv):
         if self.render_mode == "human":
             self.render()
 
+        self.step_info = info.copy()
+
         return observation, reward, terminated, False, info
 
     def render(self, *args, **kwargs):
@@ -249,7 +253,37 @@ class LeggedForwardEnv(LeggedEnv):
                 and len(self._prev_forward_profile_coords) > 0
             ):
                 self._render_terrain_profile_ray(self._prev_forward_profile_coords)
+            self._render_info()
             super().render(*args, **kwargs)
+
+    def _render_info(self):
+        if self.render_mode != "human":
+            return
+        topright = mujoco.mjtGridPos.mjGRID_TOPRIGHT
+        self.mujoco_renderer.viewer.add_overlay(
+            topright,
+            "Current Position",
+            "x: %.2f, y: %.2f"
+            % (
+                self.data.body(self.body_cfg.main_body).xpos[0],
+                self.data.body(self.body_cfg.main_body).xpos[1],
+            ),
+        )
+        self.mujoco_renderer.viewer.add_overlay(
+            topright,
+            "Forward Reward",
+            "Forward Reward: %.6f" % (self.step_info.get("reward_forward") or 0.0),
+        )
+        self.mujoco_renderer.viewer.add_overlay(
+            topright,
+            "Control Cost",
+            "Control Cost: %.6f" % (self.step_info.get("reward_ctrl") or 0.0),
+        )
+        self.mujoco_renderer.viewer.add_overlay(
+            topright,
+            "Collision Cost",
+            "Collision Cost: %.6f" % (self.step_info.get("reward_collision") or 0.0),
+        )
 
     def reset_model(self):
         noise_low = -self._reset_noise_scale

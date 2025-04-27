@@ -288,7 +288,7 @@ class LeggedEnv(MujocoEnv):
             if result != -1:
                 terrain_profiles.append(result)
             else:
-                terrain_profiles.append(0.0)  # arbitrary default value
+                terrain_profiles.append(-2)  # arbitrary default value
 
         # modify profile coords to 3d ndarray format
         formatted_profile_coords = []
@@ -354,10 +354,13 @@ class LeggedEnv(MujocoEnv):
                 intersection_geoms,
             )
 
-            if result != -1 and result < ray_length:
-                terrain_profiles.append(result)
+            if result != -1:
+                if ray_length > ray_length:
+                    terrain_profiles.append(ray_length + 1)  # arbitary default value
+                else:
+                    terrain_profiles.append(result)
             else:
-                terrain_profiles.append(0.0)
+                terrain_profiles.append(ray_length + 1)
 
         return (
             np.array(terrain_profile_coords),
@@ -445,9 +448,9 @@ class LeggedEnv(MujocoEnv):
             for ray_target in ray_targets:
                 self._render_arrow(
                     origin=ray_origin,
-                    dir=ray_target-ray_origin,
+                    dir=ray_target - ray_origin,
                     length=np.linalg.norm(
-                        ray_target-ray_origin
+                        ray_target - ray_origin
                     ),  # TODO: fix this with actual raycast result
                     color=color,
                 )
