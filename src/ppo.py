@@ -782,14 +782,17 @@ env = gym.make(
     use_forward_terrain_profile=True,
     use_circular_terrain_profile=True,
 
+    circular_terrain_profile_resolution = 15,
+    forward_terrain_profile_length=10,
+
     termination_contacts=[1, "LF_HIP", "RF_HIP", "LH_HIP", "RH_HIP"],
-    forward_reward_weight=2,
-    termination_cost=500,
-    healthy_reward=0.2,
+    forward_reward_weight=4,
+    termination_cost=800,
+    healthy_reward=0,
     termination_height_range=(-1, 2),
 
     penalized_contacts = ['LF_THIGH','LH_THIGH','RF_THIGH','RH_THIGH'],
-    collision_cost_weight=1,
+    collision_cost_weight=2,
 
     include_cfrc_ext_in_observation=True,
     include_cvel_in_observation=True,
@@ -799,7 +802,7 @@ env = gym.make(
 
 myppo = PPO(
     env,
-    reward_scale=0.04,
+    reward_scale=0.03,
     lr=1e-4,
     ent_coef=1e-4,
     timestep_per_batch=5000,
@@ -807,11 +810,11 @@ myppo = PPO(
     critic_hidden_dim=1024,
     n_updates_per_iteration=10,
     save_freq=10,
-    lam=0.98,
+    lam=0.95,
 )
 
 # turn off scienfitic notation for numpy
 np.set_printoptions(suppress=True)
 
-myppo.load_model()
+#myppo.load_model()
 myppo.learn(10000000000)

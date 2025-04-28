@@ -288,7 +288,7 @@ class LeggedEnv(MujocoEnv):
             if result != -1:
                 terrain_profiles.append(result)
             else:
-                terrain_profiles.append(-2)  # arbitrary default value
+                terrain_profiles.append(2)  # arbitrary default value
 
         # modify profile coords to 3d ndarray format
         formatted_profile_coords = []
